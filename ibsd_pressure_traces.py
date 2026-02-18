@@ -246,7 +246,7 @@ def ibsd_traces(
     omega_hapc = 2.0 * np.pi * f_hapc_hz
     omega_cmp = 2.0 * np.pi * f_cmp_hz
 
-    # Per-segment phase lag δ_κ (rad) — keep exact MATLAB definition
+    # Per-segment phase lag δ_κ (rad) 
     dx = geom.dx_cm
     delta_hapc = -(omega_hapc / max(osc.v_hapc_cmps / dx, 1e-9))
     delta_cmp = -(omega_cmp / max(osc.v_cmp_cmps / dx, 1e-9))

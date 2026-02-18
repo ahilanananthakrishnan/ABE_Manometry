@@ -29,7 +29,7 @@ import matplotlib.pyplot as plt
 class Geometry:
     L_cm: float = 150.0
     N: int = 75
-    N_HAPC: int = 50  # proximal: 1..50 (MATLAB) == 0..49 (Python)
+    N_HAPC: int = 50  
 
     @property
     def dx_cm(self) -> float:
@@ -232,7 +232,7 @@ def plot_traces_equal_spacing(
 # =============================================================================
 
 def stc_traces(
-    seed: int = 171,  # MATLAB: rng(0171)
+    seed: int = 171,  # seed
     out_txt: str = "stc_pressure_traces.txt",
     make_plot: bool = True,
 ) -> Tuple[np.ndarray, np.ndarray]:
@@ -263,7 +263,7 @@ def stc_traces(
     omega_hapc = 2.0 * np.pi * f_hapc_hz
     omega_cmp = 2.0 * np.pi * f_cmp_hz
 
-    # Per-segment phase lags δ_κ — keep exact MATLAB definition
+    # Per-segment phase lags δ_κ 
     dx = geom.dx_cm
     delta_hapc = -(omega_hapc / max(osc.v_hapc_cmps / dx, 1e-9))
     delta_cmp = -(omega_cmp / max(osc.v_cmp_cmps / dx, 1e-9))

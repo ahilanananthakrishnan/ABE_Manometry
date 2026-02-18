@@ -307,7 +307,7 @@ def healthy_traces(
     omega_hapc = 2.0 * np.pi * f_hapc_hz
     omega_cmp = 2.0 * np.pi * f_cmp_hz
 
-    # Per-segment phase lag δ_κ (rad), implemented as in MATLAB
+    # Per-segment phase lag δ_κ (rad)
     dx = geom.dx_cm
     delta_hapc = -(omega_hapc / max(osc.v_hapc_cmps / dx, 1e-9))
     delta_cmp = -(omega_cmp / max(osc.v_cmp_cmps / dx, 1e-9))
@@ -382,7 +382,7 @@ def healthy_traces(
         if cmp_enabled:
             dphi_C[s0_cmp] = wdt_cmp
             for s in range(s0_cmp + 1, N):
-                s_neigh = s - 1  # keep MATLAB structure
+                s_neigh = s - 1  
                 dphi_C[s] = wdt_cmp + osc.k_cmp * np.sin((phi_C[s_neigh] + (-delta_cmp)) - phi_C[s])
         else:
             dphi_C[s0_cmp:] = 0.0
