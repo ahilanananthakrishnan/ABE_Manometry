@@ -3,8 +3,8 @@
 `pressure_traces.py` simulates whole-colon pressure traces for three
 phenotypes:
 
--   Healthy\
--   IBS-D\
+-   Healthy
+-   IBS-D
 -   STC
 
 The colon is modeled as 75 coupled segments including: 
@@ -46,7 +46,7 @@ The script generates:
 
     <phenotype>_pressure_traces.txt
 
-Columns: - Time_s\
+Columns: - Time_s
 - Seg_1 to Seg_75
 
 All pressures are in mmHg.
