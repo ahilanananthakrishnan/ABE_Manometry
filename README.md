@@ -1,17 +1,52 @@
-# Whole-Colon Motility Model (Python)
+# Whole-Colon Pressure Traces Model
 
-This folder contains the Python implementations used to generate whole-colon stacked pressure traces for three phenotypes:
+`pressure_traces.py` simulates whole-colon pressure traces for three
+phenotypes:
 
-- **Healthy**: `healthy_traces.py`
-- **IBS-D**: `ibsd_traces.py`
-- **STC**: `stc_traces.py`
+-   Healthy\
+-   IBS-D\
+-   STC
 
-Each script simulates a 1D colon with **N = 75 segments** (proximal HAPC: 1–50, distal CMP: 51–75) and exports a tab-delimited pressure trace file compatible with plotting/analysis workflows.
+The colon is modeled as 75 coupled segments including: 
+- ICC-inspired phase oscillators
+- Enteric reflex drive (ascending excitation, descending inhibition)
+- Smooth muscle activation dynamics
+- Nonlinear pressure--area (tube law) mechanics
+- A pressure-gated rectosigmoid brake in the distal colon
 
----
+The script outputs time-resolved pressure (mmHg) for all 75 segments.
 
-## Requirements
+------------------------------------------------------------------------
 
-- Python 3.10+
-- NumPy
-- Matplotlib
+## How to Run
+
+From the project directory:
+
+    python pressure_traces.py
+
+------------------------------------------------------------------------
+
+## Changing the Phenotype
+
+At the top of `pressure_traces.py`, edit:
+
+    PHENOTYPE = "healthy"   # options: "healthy", "ibsd", "stc"
+
+Optional settings:
+
+    MAKE_PLOT = True        # set False to disable plotting
+    OUT_TXT = None          # custom output filename
+    SEED = 171              # random seed for STC phenotype
+
+------------------------------------------------------------------------
+
+## Output
+
+The script generates:
+
+    <phenotype>_pressure_traces.txt
+
+Columns: - Time_s\
+- Seg_1 to Seg_75
+
+All pressures are in mmHg.
