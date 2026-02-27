@@ -35,7 +35,6 @@ SEED = 171
 
 OUT_TXT = None
 MAKE_PLOT = True
-GATE_TOTAL_DISTAL_WHEN_BRAKE_ON = True
 
 
 # =============================================================================
@@ -335,13 +334,15 @@ def run_traces() -> Tuple[np.ndarray, np.ndarray]:
             p_inst = pressure_from_M(M, tube)
             aP = sim.dt / brk.tau_P
             p_lp = (1.0 - aP) * p_lp + aP * p_inst
+
             p_gate = float(np.max(p_lp[brk.F_sense_idx]))
-            if cmp_enabled and (p_gate >= brk.p_on):
-                cmp_enabled = False
-            if (not cmp_enabled) and (p_gate <= brk.p_off):
-                cmp_enabled = True
-        else:
-            cmp_enabled = True
+
+            if cmp_enabled:
+                if p_gate >= brk.p_on:
+                    cmp_enabled = False
+            else:
+                if p_gate <= brk.p_off:
+                    cmp_enabled = True
 
         # ICC-derived myogenic drive with local spread
         D_ICC = np.zeros(N, dtype=float)
@@ -366,7 +367,7 @@ def run_traces() -> Tuple[np.ndarray, np.ndarray]:
 
         # Total excitatory drive; distal gating when brake is ON
         E_total = D_ICC + E_ENS
-        if brake_enabled and GATE_TOTAL_DISTAL_WHEN_BRAKE_ON and (not cmp_enabled):
+        if brake_enabled and (not cmp_enabled):
             E_total[N_HAPC:] = 0.0
 
         # Low-pass filter of excitation: dE*/dt = (E - E*)/tau_E
