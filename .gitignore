@@ -1,0 +1,11 @@
+# Python cache
+__pycache__/
+*.pyc
+
+# macOS
+.DS_Store
+
+
+# output files
+outputs/*
+*_pressure_traces.txt
