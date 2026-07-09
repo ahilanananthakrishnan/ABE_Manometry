@@ -2,13 +2,13 @@
 Visualizes output of manometry model based on the paper's own model code (pressure_traces.py)
 
 Panels (choose any subset/order via PANELS below):
-  phi     Pacemaker phase          Eq. (1)
-  W       Pacemaker waveform       Eq. (4)
-  D       ICC drive                Eq. (5)
-  ENS     ENS drive                Eq. (7)
-  E       Total excitatory drive   Eq. (8)
-  M       Muscle activation        Eq. (10)
-  tube    Contraction and pressure Eqs. (12)-(13)
+  phi     Pacemaker phase
+  W       Pacemaker waveform
+  D       ICC drive
+  ENS     ENS drive
+  E       Total excitatory drive
+  M       Muscle activation
+  tube    Contraction and pressure
   traces  Pressure trace over time (spatiotemporal waterfall, revealed as it plays)
 """
 
@@ -28,16 +28,12 @@ from pressure_traces import Geometry, SimParams, run_traces
 # USER SETTINGS
 # =============================================================================
 PHENOTYPE = "healthy"
-
-R0_CM = 2.5
-FRAME_STRIDE = 10
-FPS = 20
 SEGMENT_VIEW = "hapc"   # "hapc" = segments 1-50 (proximal HAPC region only), "all" = every segment (1-75)
-TRACE_GAIN_CM = 20.0   # vertical excursion (cm) of the "traces" panel at peak pressure
 OUT_FILE = f"outputs/visualization_components_{PHENOTYPE}_{SEGMENT_VIEW}.mp4"
 
 # Which panels to draw, and in what order. Any subset of PANEL_SPECS' keys below.
 PANELS = ["D", "ENS", "M", "tube"]
+
 
 # --- Overall figure size ---
 # Leave FIG_WIDTH_IN as None to auto-size from the number/width of selected panels.
@@ -47,17 +43,49 @@ FIG_WIDTH_IN = 12
 FIG_HEIGHT_IN = 6
 
 PANEL_WIDTH_IN = 3.0   # auto-sizing: inches per unit of panel "width" (used when FIG_WIDTH_IN is None)
-WSPACE = 0.45          # horizontal gap between panels (gridspec wspace, in axes-widths)
-LEFT_MARGIN_IN = 0.75  # room for the rotated Proximal/Distal labels
-RIGHT_MARGIN_IN = 0.25
-TOP_MARGIN_IN = 1.7    # room for time text + column titles
-BOTTOM_MARGIN_IN = 1.0 # room for x-axis labels/ticks
-CBAR_GAP_IN = 0.25
+WSPACE = 0.15          # horizontal gap between panels (gridspec wspace, in axes-widths)
+LEFT_MARGIN_IN = 0.45  # room for the rotated Proximal/Distal labels
+RIGHT_MARGIN_IN = 0.12
+TOP_MARGIN_IN = 0.65   # room for time text + column titles
+TIME_TEXT_GAP_IN = 0.06   # distance from the figure's top edge down to the time readout
+BOTTOM_MARGIN_IN = 0.55   # room for x-axis labels/ticks
+CBAR_GAP_IN = 0.15
 CBAR_WIDTH_IN = 0.15
-CBAR_LABEL_IN = 0.55   # extra room for the colorbar's own axis label
+CBAR_LABEL_IN = 0.45   # extra room for the colorbar's own axis label
 
+# --- Style / rendering constants ---
+R0_CM = 2.5                    # resting tube radius (cm)
+TRACE_GAIN_CM = 20.0           # vertical excursion (cm) of the "traces" panel at peak pressure
 NARROW_WIDTH_THRESHOLD = 0.5   # panels with a width_ratio below this get a rotated
                                # title and no x-tick labels, since they're too thin to fit them
+
+TITLE_FONTSIZE = 11
+NARROW_TITLE_FONTSIZE = 9      # used instead of TITLE_FONTSIZE for panels below NARROW_WIDTH_THRESHOLD
+LABEL_FONTSIZE = 11            # Proximal/Distal axis labels and the running time readout
+
+TUBE_CANVAS_NY = 220           # vertical raster resolution of the tube cross-section image
+TUBE_RADIUS_HEADROOM = 1.02    # Rmax = R0_CM * this, so the wall outline isn't flush with the image edge
+TUBE_XLIM_PAD = 1.15           # extra padding factor applied to the tube panel's radius axis limits
+TUBE_OUTLINE_COLOR = "#333333"
+TUBE_OUTLINE_LW = 1.2
+
+TRACE_LINE_COLOR = "black"
+TRACE_LINE_LW = 0.6
+
+ZERO_LINE_COLOR = "#999999"        # dotted reference line at 0, for panels whose signal can go negative (e.g. ENS)
+ZERO_LINE_LW = 0.8
+
+PRESSURE_COLOR_PERCENTILE = 99.5   # colormap vmax = this percentile of shown pressure, so a rare
+                                   # outlier spike doesn't wash out the rest of the color scale
+
+FRAME_STRIDE = 10
+FPS = 20
+VIDEO_DPI = 135
+VIDEO_BITRATE = 3000
+
+PROXIMAL_DISTAL_X_OFFSET = -0.1    # axes-fraction horizontal offset of the rotated Proximal/Distal labels
+PROXIMAL_Y_FRAC = 0.06             # fraction of the shown span where "Proximal" is anchored (near the top)
+DISTAL_Y_FRAC = 0.94               # fraction of the shown span where "Distal" is anchored (near the bottom)
 
 
 # =============================================================================
@@ -65,14 +93,20 @@ NARROW_WIDTH_THRESHOLD = 0.5   # panels with a width_ratio below this get a rota
 # xlim may be a fixed (lo, hi) tuple or a callable(data) -> (lo, hi).
 # =============================================================================
 def _xlim_nonneg(data):
+    # 15% headroom above the max so the peak isn't flush against the axis edge;
+    # -0.02 keeps the zero line visibly inside the axis rather than right on it.
     return (-0.02, float(data.max()) * 1.15)
 
 
 def _xlim_activation(data):
+    # Same idea as _xlim_nonneg, but with a 0.4 floor so this panel doesn't zoom
+    # in distractingly tight when activation stays small all frame.
     return (-0.02, max(0.4, float(data.max())) * 1.1)
 
 
 def _xlim_symmetric(data):
+    # Symmetric-ish padding around a signal that can be positive or negative (e.g. ENS).
+    # The 1e-6 floor avoids a zero-width axis if the data is exactly flat.
     lo = float(data.min()); hi = float(data.max())
     pad = 0.15 * max(abs(lo), abs(hi), 1e-6)
     return (lo - pad, hi + pad)
@@ -80,10 +114,10 @@ def _xlim_symmetric(data):
 
 PANEL_SPECS = {
     "phi": dict(title="Pacemaker phase", color="#1b2a4a", xlabel=r"$\phi_s$ (rad)",
-                width=1.0, xlim=(-0.3, 2 * np.pi + 0.3),
+                width=1.0, xlim=(-0.3, 2 * np.pi + 0.3),   # +/-0.3 rad padding around [0, 2*pi]
                 xticks=([0, np.pi, 2 * np.pi], ["0", "π", "2π"])),
     "W": dict(title="Pacemaker waveform", color="#127a75", xlabel=r"$W_s$",
-              width=1.0, xlim=(-0.05, 1.05)),
+              width=1.0, xlim=(-0.05, 1.05)),   # +/-0.05 padding around the normalized [0, 1] waveform
     "D": dict(title="ICC pacemakers", color="#c98a2c", xlabel=r"$D_s^{\rm ICC}$",
               width=1.0, xlim=_xlim_nonneg),
     "ENS": dict(title="Peristaltic reflex", color="#4c72b0", xlabel=r"$E_s^{\rm ENS}$",
@@ -136,14 +170,13 @@ def make_animation(t_rec, Phi_rec, W_rec, D_ICC_rec, ENS_rec, E_rec, M_rec, A_re
     P_s = P_rec[:, i0:i1]
     radius = R0_CM * np.sqrt(A_s)
 
-    Tsim = SimParams().Tsim
+    Tsim = SimParams().Tsim   # simulated duration (s), from pressure_traces' own SimParams default
     frame_idx = np.arange(0, len(t_rec), FRAME_STRIDE)
 
-    ny = 220
-    Rmax = R0_CM * 1.02
-    y_grid = np.linspace(-Rmax, Rmax, ny)
+    Rmax = R0_CM * TUBE_RADIUS_HEADROOM
+    y_grid = np.linspace(-Rmax, Rmax, TUBE_CANVAS_NY)
 
-    p_vmax = float(np.percentile(P_s, 99.5))
+    p_vmax = float(np.percentile(P_s, PRESSURE_COLOR_PERCENTILE))
     norm = Normalize(vmin=0.0, vmax=p_vmax)
     cmap = plt.get_cmap("inferno").copy()
     cmap.set_bad(color="white")
@@ -172,21 +205,23 @@ def make_animation(t_rec, Phi_rec, W_rec, D_ICC_rec, ENS_rec, E_rec, M_rec, A_re
 
     for ax, key in zip(axes, PANELS):
         spec = PANEL_SPECS[key]
+        is_narrow = spec["width"] < NARROW_WIDTH_THRESHOLD
 
         if key == "tube":
             canvas0 = build_canvas(radius[k0], P_s[k0], y_grid, n_show).T
             im = ax.imshow(canvas0, extent=[-Rmax, Rmax, y_bot, y_top], origin="upper",
                             aspect="auto", cmap=cmap, norm=norm, interpolation="bilinear")
-            outline_top, = ax.plot(radius[k0], x_seg, color="#333333", lw=1.2)
-            outline_bot, = ax.plot(-radius[k0], x_seg, color="#333333", lw=1.2)
-            ax.set_xlim(-Rmax * 1.15, Rmax * 1.15)
-            if spec["width"] >= NARROW_WIDTH_THRESHOLD:
-                ax.set_xlabel("Radius (cm)")
-            else:
+            outline_top, = ax.plot(radius[k0], x_seg, color=TUBE_OUTLINE_COLOR, lw=TUBE_OUTLINE_LW)
+            outline_bot, = ax.plot(-radius[k0], x_seg, color=TUBE_OUTLINE_COLOR, lw=TUBE_OUTLINE_LW)
+            ax.set_xlim(-Rmax * TUBE_XLIM_PAD, Rmax * TUBE_XLIM_PAD)
+            if is_narrow:
                 ax.set_xticks([])
+            else:
+                ax.set_xlabel("Radius (cm)")
             artists["tube"] = {"im": im, "top": outline_top, "bot": outline_bot}
         elif key == "traces":
-            trace_lines = [ax.plot([], [], color="black", lw=0.6)[0] for _ in range(n_show)]
+            trace_lines = [ax.plot([], [], color=TRACE_LINE_COLOR, lw=TRACE_LINE_LW)[0]
+                            for _ in range(n_show)]
             ax.set_xlim(0, Tsim)
             ax.set_xlabel("Time (s)")
             artists["traces"] = trace_lines
@@ -197,31 +232,34 @@ def make_animation(t_rec, Phi_rec, W_rec, D_ICC_rec, ENS_rec, E_rec, M_rec, A_re
             ax.set_xlim(*xlim)
             ax.set_xlabel(spec["xlabel"])
             if spec.get("zero_line"):
-                ax.axvline(0, color="#999999", lw=0.8, ls=":")
+                ax.axvline(0, color=ZERO_LINE_COLOR, lw=ZERO_LINE_LW, ls=":")
             if "xticks" in spec:
                 pos, labels = spec["xticks"]
                 ax.set_xticks(pos); ax.set_xticklabels(labels)
             artists[key] = line
 
-        if spec["width"] >= NARROW_WIDTH_THRESHOLD:
-            ax.set_title(spec["title"], fontsize=11, fontweight="bold", color=spec["color"])
+        if is_narrow:
+            # Horizontal titles don't fit in a very thin column, so rotate to vertical instead.
+            ax.set_title(spec["title"], fontsize=NARROW_TITLE_FONTSIZE, fontweight="bold",
+                         color=spec["color"], rotation=90, rotation_mode="anchor",
+                         ha="left", va="bottom")
         else:
-            ax.set_title(spec["title"], fontsize=9, fontweight="bold", color=spec["color"],
-                         rotation=90, rotation_mode="anchor", ha="left", va="bottom")
+            ax.set_title(spec["title"], fontsize=TITLE_FONTSIZE, fontweight="bold", color=spec["color"])
         ax.spines[["top", "right"]].set_visible(False)
 
     axes[0].set_ylim(y_bot, y_top)
     axes[0].set_yticks([])
     y_label_trans = axes[0].get_yaxis_transform()
-    axes[0].text(-0.25, y_top + 0.06 * (y_bot - y_top), "Proximal", transform=y_label_trans,
-                 ha="center", va="center", rotation=90, rotation_mode="anchor",
-                 fontsize=11, fontweight="bold")
-    axes[0].text(-0.25, y_top + 0.94 * (y_bot - y_top), "Distal", transform=y_label_trans,
-                 ha="center", va="center", rotation=90, rotation_mode="anchor",
-                 fontsize=11, fontweight="bold")
+    axes[0].text(PROXIMAL_DISTAL_X_OFFSET, y_top + PROXIMAL_Y_FRAC * (y_bot - y_top), "Proximal",
+                 transform=y_label_trans, ha="center", va="center", rotation=90,
+                 rotation_mode="anchor", fontsize=LABEL_FONTSIZE, fontweight="bold")
+    axes[0].text(PROXIMAL_DISTAL_X_OFFSET, y_top + DISTAL_Y_FRAC * (y_bot - y_top), "Distal",
+                 transform=y_label_trans, ha="center", va="center", rotation=90,
+                 rotation_mode="anchor", fontsize=LABEL_FONTSIZE, fontweight="bold")
 
-    time_text = fig.text(0.5, 1.0 - 0.5 * TOP_MARGIN_IN / fig_height, "",
-                          ha="center", fontsize=11, fontweight="bold")
+    # Anchored a fixed, small gap below the figure's top edge, independent of TOP_MARGIN_IN.
+    time_text = fig.text(0.5, 1.0 - TIME_TEXT_GAP_IN / fig_height, "",
+                          ha="center", va="top", fontsize=LABEL_FONTSIZE, fontweight="bold")
 
     left = LEFT_MARGIN_IN / fig_width
     right_base = 1.0 - RIGHT_MARGIN_IN / fig_width
@@ -263,10 +301,10 @@ def make_animation(t_rec, Phi_rec, W_rec, D_ICC_rec, ENS_rec, E_rec, M_rec, A_re
         return tuple(updated)
 
     ani = animation.FuncAnimation(fig, update, frames=len(frame_idx),
-                                   blit=False, interval=1000/FPS)
-    writer = animation.FFMpegWriter(fps=FPS, bitrate=3000)
+                                   blit=False, interval=1000 / FPS)
+    writer = animation.FFMpegWriter(fps=FPS, bitrate=VIDEO_BITRATE)
     os.makedirs(os.path.dirname(OUT_FILE), exist_ok=True)
-    ani.save(OUT_FILE, writer=writer, dpi=135)
+    ani.save(OUT_FILE, writer=writer, dpi=VIDEO_DPI)
     plt.close(fig)
 
 
