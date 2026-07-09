@@ -40,34 +40,31 @@ MAKE_PLOT = True
 # =============================================================================
 # CASE-SPECIFIC PARAMETERS (Table: cases)
 # =============================================================================
-ph = PHENOTYPE.strip().lower()
+@dataclass(frozen=True)
+class PhenotypeParams:
+    a_hapc: float        # [-] HAPC pacemaker amplitude
+    brake_enabled: bool  # [-] rectosigmoid brake active
+    k_hapc: float        # [rad/s] coupling strength (HAPC)
+    k_cmp: float         # [rad/s] coupling strength (CMP)
+    v_hapc_cmps: float   # [cm/s] preferred HAPC propagation speed
+    sigma_phi: float     # [rad/sqrt(s)] phase noise amplitude
 
-if ph == "healthy":
-    a_hapc = 0.77          # [-] HAPC pacemaker amplitude
-    brake_enabled = True   # [-] rectosigmoid brake active
-    k_hapc = 2.0           # [rad/s] coupling strength (HAPC)
-    k_cmp = 2.0            # [rad/s] coupling strength (CMP)
-    v_hapc_cmps = 1.2      # [cm/s] preferred HAPC propagation speed
-    sigma_phi = 0.0        # [rad/sqrt(s)] phase noise amplitude
 
-elif ph == "ibsd":
-    a_hapc = 0.70          # [-]
-    brake_enabled = False  # [-] brake disabled (Gamma_CMP ≡ 1)
-    k_hapc = 2.0           # [rad/s]
-    k_cmp = 2.0            # [rad/s]
-    v_hapc_cmps = 5.0      # [cm/s]
-    sigma_phi = 0.0        # [rad/sqrt(s)]
-
-elif ph == "stc":
-    a_hapc = 0.62          # [-]
-    brake_enabled = True   # [-]
-    k_hapc = 0.2           # [rad/s] weak coupling
-    k_cmp = 0.2            # [rad/s] weak coupling
-    v_hapc_cmps = 1.1      # [cm/s]
-    sigma_phi = 0.5        # [rad/sqrt(s)] added noise
-
-else:
-    raise ValueError("PHENOTYPE must be one of: 'healthy', 'ibsd', 'stc'")
+def phenotype_params(phenotype: str) -> PhenotypeParams:
+    label = phenotype.strip().lower()
+    if label == "healthy":
+        return PhenotypeParams(a_hapc=0.77, brake_enabled=True, k_hapc=2.0, k_cmp=2.0,
+                                v_hapc_cmps=1.2, sigma_phi=0.0)
+    elif label == "ibsd":
+        # brake disabled (Gamma_CMP ≡ 1)
+        return PhenotypeParams(a_hapc=0.70, brake_enabled=False, k_hapc=2.0, k_cmp=2.0,
+                                v_hapc_cmps=5.0, sigma_phi=0.0)
+    elif label == "stc":
+        # weak coupling, added noise
+        return PhenotypeParams(a_hapc=0.62, brake_enabled=True, k_hapc=0.2, k_cmp=0.2,
+                                v_hapc_cmps=1.1, sigma_phi=0.5)
+    else:
+        raise ValueError("PHENOTYPE must be one of: 'healthy', 'ibsd', 'stc'")
 
 
 # =============================================================================
@@ -238,7 +235,22 @@ def plot_traces_equal_spacing(t: np.ndarray, P: np.ndarray, title: str, pp: Plot
 # =============================================================================
 # Main simulation (Euler + Euler-Maruyama for phase noise)
 # =============================================================================
-def run_traces() -> Tuple[np.ndarray, np.ndarray]:
+def run_traces(phenotype: str = PHENOTYPE, write_output: bool = True,
+               make_plot: bool = MAKE_PLOT) -> Tuple[
+                        np.ndarray, np.ndarray, np.ndarray, 
+                        np.ndarray, np.ndarray, np.ndarray,
+                        np.ndarray, np.ndarray, np.ndarray, 
+                        Geometry]:
+
+    ph = phenotype.strip().lower()
+    _case = phenotype_params(phenotype)
+    a_hapc = _case.a_hapc
+    brake_enabled = _case.brake_enabled
+    k_hapc = _case.k_hapc
+    k_cmp = _case.k_cmp
+    v_hapc_cmps = _case.v_hapc_cmps
+    sigma_phi = _case.sigma_phi
+
     geom = Geometry()
     base = OscillatorHealthyBaseline()
     wf = WaveformParams()
@@ -291,6 +303,13 @@ def run_traces() -> Tuple[np.ndarray, np.ndarray]:
     p_lp = pressure_from_M(M, tube)
     cmp_enabled = True  # Gamma_CMP(t) == 1 when True, 0 when False
 
+    Phi_rec = np.zeros((sim.n_run, N), dtype=float)
+    W_rec = np.zeros((sim.n_run, N), dtype=float)
+    D_ICC_rec = np.zeros((sim.n_run, N), dtype=float)
+    ENS_rec = np.zeros((sim.n_run, N), dtype=float)
+    E_rec = np.zeros((sim.n_run, N), dtype=float)
+    M_rec = np.zeros((sim.n_run, N), dtype=float)
+    A_rec = np.zeros((sim.n_run, N), dtype=float)
     P_rec = np.zeros((sim.n_run, N), dtype=float)
     t_rec = np.zeros(sim.n_run, dtype=float)
 
@@ -379,24 +398,34 @@ def run_traces() -> Tuple[np.ndarray, np.ndarray]:
         aM = sim.dt / tau_s
         M[:] = (1.0 - aM) * M + aM * E_star
 
-        # Record pressure via nonlinear tube law
+        # Record intermediate signals and pressure via nonlinear tube law
+        Phi_rec[k, :N_HAPC] = np.mod(phi_H[:N_HAPC], 2 * np.pi)
+        Phi_rec[k, N_HAPC:] = np.mod(phi_C[N_HAPC:], 2 * np.pi)
+        W_rec[k, :N_HAPC] = W_H[:N_HAPC]
+        W_rec[k, N_HAPC:] = W_C[N_HAPC:]
+        D_ICC_rec[k, :] = D_ICC
+        ENS_rec[k, :] = E_ENS
+        E_rec[k, :] = E_total
+        M_rec[k, :] = M
+        A_rec[k, :] = area_from_M(M, tube)
         P_rec[k, :] = pressure_from_M(M, tube)
         t_rec[k] = t
 
     maxP = float(np.max(P_rec))
     print(f"Max pressure across all sensors ({ph.upper()} model): {maxP:.3f} mmHg")
 
-    header = "Time_s" + "".join([f"\tSeg_{i}" for i in range(1, N + 1)])
-    data_out = np.column_stack([t_rec, P_rec])
+    if write_output:
+        header = "Time_s" + "".join([f"\tSeg_{i}" for i in range(1, N + 1)])
+        data_out = np.column_stack([t_rec, P_rec])
 
-    with open(out_txt, "w", encoding="utf-8") as f:
-        f.write(header + "\n")
-    with open(out_txt, "ab") as f:
-        np.savetxt(f, data_out, delimiter="\t", fmt="%.5f")
+        with open(out_txt, "w", encoding="utf-8") as f:
+            f.write(header + "\n")
+        with open(out_txt, "ab") as f:
+            np.savetxt(f, data_out, delimiter="\t", fmt="%.5f")
 
-    print(f"Pressure trace data written to: {out_txt}")
+        print(f"Pressure trace data written to: {out_txt}")
 
-    if MAKE_PLOT:
+    if make_plot:
         plot_traces_equal_spacing(
             t_rec,
             P_rec,
@@ -404,7 +433,7 @@ def run_traces() -> Tuple[np.ndarray, np.ndarray]:
             pp=pp,
         )
 
-    return t_rec, P_rec
+    return t_rec, Phi_rec, W_rec, D_ICC_rec, ENS_rec, E_rec, M_rec, A_rec, P_rec, geom
 
 
 if __name__ == "__main__":
