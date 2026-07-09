@@ -10,6 +10,9 @@ Panels (choose any subset/order via PANELS below):
   M       Muscle activation
   tube    Contraction and pressure
   traces  Pressure trace over time (spatiotemporal waterfall, revealed as it plays)
+
+Author: Maria Holland
+Units: length (cm)
 """
 
 from __future__ import annotations
