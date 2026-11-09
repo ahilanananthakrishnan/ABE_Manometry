@@ -20,6 +20,10 @@ The script outputs time-resolved pressure (mmHg) for all 75 segments.
 
 ## How to Run
 
+Install the Python dependencies (Python 3.10+):
+
+    pip install -r requirements.txt
+
 From the project directory:
 
     python pressure_traces.py
@@ -46,7 +50,29 @@ The script generates:
 
     <phenotype>_pressure_traces.txt
 
-Columns: - Time_s
-- Seg_1 to Seg_75
+Columns:
+
+-   Time_s
+-   Seg_1 to Seg_75
 
 All pressures are in mmHg.
+
+------------------------------------------------------------------------
+
+## Animation
+
+`visualization.py` runs the model for the `PHENOTYPE` set in
+`pressure_traces.py` and renders the internal signals (ICC drive, ENS
+drive, muscle activation, tube cross-section, ...) as a video. It needs
+the `ffmpeg` command-line tool, e.g.
+
+    brew install ffmpeg        # or: conda install ffmpeg
+
+Then run:
+
+    python visualization.py
+
+Choose the panels and segment range with `PANELS` and `SEGMENT_VIEW` at
+the top of `visualization.py`. The video is written to
+
+    outputs/visualization_components_<phenotype>_<segment_view>.mp4
