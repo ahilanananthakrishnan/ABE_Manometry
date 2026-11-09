@@ -20,8 +20,8 @@ Rectosigmoid brake:
 
 from __future__ import annotations
 
-from dataclasses import dataclass
-from typing import NamedTuple, Optional, Tuple
+from dataclasses import dataclass, fields, replace
+from typing import Dict, NamedTuple, Optional, Tuple
 
 import numpy as np
 import matplotlib.pyplot as plt
@@ -175,6 +175,45 @@ class TraceResults(NamedTuple):
     geom: "Geometry"
 
 
+ParameterGroups = Tuple[PhenotypeParams, OscillatorHealthyBaseline, WaveformParams, ENSParams,
+                        MuscleParams, BrakeParams]
+
+
+def parameter_groups(phenotype: str,
+                     overrides: Optional[Dict[str, float]] = None) -> ParameterGroups:
+    """Parameter groups that run_traces uses, with ``overrides`` applied by field name.
+
+    Tube-law, geometry, and time-step parameters are not overridable here.
+    """
+    groups = [phenotype_params(phenotype), OscillatorHealthyBaseline(), WaveformParams(),
+              ENSParams(), MuscleParams(), BrakeParams()]
+    for name, value in (overrides or {}).items():
+        owners = [i for i, g in enumerate(groups) if name in {f.name for f in fields(g)}]
+        if len(owners) != 1:
+            raise KeyError(f"Unknown parameter for override: {name}")
+        groups[owners[0]] = replace(groups[owners[0]], **{name: value})
+    return tuple(groups)
+
+
+# =============================================================================
+# Phase oscillator chain (Eq. 1): deterministic Euler increment
+# =============================================================================
+def phase_chain_increment(phi: np.ndarray, omega: float, k: float, delta: float,
+                          retrograde: bool, dt: float) -> np.ndarray:
+    """Deterministic Euler increment of Eq. (1) for one nearest-neighbor chain.
+
+    The leading oscillator (first element if anterograde, last if retrograde)
+    runs at its intrinsic frequency; every other oscillator is pulled toward
+    its upstream neighbor's phase plus the lag ``delta``.
+    """
+    dphi = np.full_like(phi, omega * dt, dtype=float)
+    if retrograde:
+        dphi[:-1] += k * dt * np.sin(phi[1:] + delta - phi[:-1])
+    else:
+        dphi[1:] += k * dt * np.sin(phi[:-1] + delta - phi[1:])
+    return dphi
+
+
 # =============================================================================
 # ICC waveform W_s(phi_s): skewed upstroke + exponential decay
 # =============================================================================
@@ -262,23 +301,29 @@ def plot_traces_equal_spacing(t: np.ndarray, P: np.ndarray, title: str, pp: Plot
 # =============================================================================
 def run_traces(phenotype: str = PHENOTYPE, write_output: bool = True,
                make_plot: bool = MAKE_PLOT, seed: Optional[int] = SEED,
-               out_txt: Optional[str] = OUT_TXT) -> TraceResults:
+               out_txt: Optional[str] = OUT_TXT, gate_out: Optional[list] = None,
+               overrides: Optional[Dict[str, float]] = None,
+               random_phase_seed: Optional[int] = None,
+               dt: Optional[float] = None) -> TraceResults:
     """Simulate all segments for one phenotype and return the recorded time histories.
 
-    seed seeds NumPy's global RNG (only affects phenotypes with phase noise). out_txt
-    defaults to '<phenotype>_pressure_traces.txt' in the current directory.
+    ``seed`` seeds NumPy's global RNG (only affects phenotypes with phase noise).
+    ``out_txt`` defaults to '<phenotype>_pressure_traces.txt' in the current directory.
+    If ``gate_out`` is a list, the distal brake gate Gamma_CMP(t) (1 = open,
+    0 = brake ON) is appended to it as an array, one value per time step.
+    ``overrides`` maps parameter field names (e.g. ``"k_w"``, ``"a_hapc"``) to
+    new values; it is used by the sensitivity analysis.
+    If ``random_phase_seed`` is given, all initial phases are drawn uniformly
+    from [0, 2*pi) with that seed instead of the default initial conditions
+    (used to check that the phase-locked state does not depend on them).
+    ``dt`` overrides the time step [s] (used for the time-step convergence check).
     """
     ph = phenotype.strip().lower()
-    case = phenotype_params(phenotype)
+    case, base, wf, ens, mus, brk = parameter_groups(phenotype, overrides)
 
     geom = Geometry()
-    base = OscillatorHealthyBaseline()
-    wf = WaveformParams()
-    ens = ENSParams()
-    mus = MuscleParams()
     tube = TubeLawParams()
-    brk = BrakeParams()
-    sim = SimParams()
+    sim = SimParams() if dt is None else SimParams(dt=dt)
     pp = PlotParams()
 
     if seed is not None:
@@ -307,6 +352,10 @@ def run_traces(phenotype: str = PHENOTYPE, write_output: bool = True,
 
     # Initial conditions: proximal linear phase gradient, distal uniform phase (zero)
     phi_H[:N_HAPC] = np.arange(N_HAPC) * delta_hapc
+    if random_phase_seed is not None:
+        rng_ic = np.random.default_rng(random_phase_seed)
+        phi_H[:N_HAPC] = rng_ic.uniform(0.0, 2.0 * np.pi, N_HAPC)
+        phi_C[N_HAPC:] = rng_ic.uniform(0.0, 2.0 * np.pi, N - N_HAPC)
 
     # Initialize filtered excitation and muscle activation consistent with ICC waveform
     E_star = np.zeros(N, dtype=float)
@@ -327,29 +376,22 @@ def run_traces(phenotype: str = PHENOTYPE, write_output: bool = True,
     A_rec = np.zeros((sim.n_run, N), dtype=float)
     P_rec = np.zeros((sim.n_run, N), dtype=float)
     t_rec = np.arange(sim.n_run) * sim.dt
+    gate_rec = np.ones(sim.n_run, dtype=float)
 
     # Per-step constants
     sd = case.sigma_phi * np.sqrt(sim.dt)  # Euler-Maruyama noise scale: sigma_phi * sqrt(dt)
-    wdt_hapc = omega_hapc * sim.dt
-    wdt_cmp = omega_cmp * sim.dt
-    kdt_hapc = case.k_hapc * sim.dt
-    kdt_cmp = case.k_cmp * sim.dt
     aP = sim.dt / brk.tau_P
     aE = sim.dt / mus.tau_E
 
     for k in range(sim.n_run):
 
-        # Nearest-neighbor coupling: HAPC anterograde (s-1), CMP retrograde (s+1);
-        # the first HAPC segment and the last CMP segment are the free-running pacemakers
+        # Nearest-neighbor coupling: HAPC anterograde (s-1), CMP retrograde (s+1)
         dphi_H = np.zeros(N, dtype=float)
-        dphi_H[0] = wdt_hapc
-        dphi_H[1:N_HAPC] = wdt_hapc + kdt_hapc * np.sin(
-            phi_H[:N_HAPC - 1] + delta_hapc - phi_H[1:N_HAPC])
-
         dphi_C = np.zeros(N, dtype=float)
-        dphi_C[N - 1] = wdt_cmp
-        dphi_C[N_HAPC:N - 1] = wdt_cmp + kdt_cmp * np.sin(
-            phi_C[N_HAPC + 1:] + delta_cmp - phi_C[N_HAPC:N - 1])
+        dphi_H[:N_HAPC] = phase_chain_increment(phi_H[:N_HAPC], omega_hapc, case.k_hapc,
+                                                delta_hapc, retrograde=False, dt=sim.dt)
+        dphi_C[N_HAPC:] = phase_chain_increment(phi_C[N_HAPC:], omega_cmp, case.k_cmp,
+                                                delta_cmp, retrograde=True, dt=sim.dt)
 
         # Phase noise (applied within each subnetwork)
         if sd > 0.0:
@@ -420,6 +462,7 @@ def run_traces(phenotype: str = PHENOTYPE, write_output: bool = True,
         M_rec[k, :] = M
         A_rec[k, :] = area_from_M(M, tube)
         P_rec[k, :] = pressure_from_A(A_rec[k], tube)
+        gate_rec[k] = 1.0 if cmp_enabled else 0.0
 
     maxP = float(np.max(P_rec))
     print(f"Max pressure across all sensors ({ph.upper()} model): {maxP:.3f} mmHg")
@@ -438,6 +481,9 @@ def run_traces(phenotype: str = PHENOTYPE, write_output: bool = True,
             title=f"Pressure traces — {ph.upper()}",
             pp=pp,
         )
+
+    if gate_out is not None:
+        gate_out.append(gate_rec)
 
     return TraceResults(t_rec, Phi_rec, W_rec, D_ICC_rec, ENS_rec, E_rec, M_rec, A_rec, P_rec,
                         geom)

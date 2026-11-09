@@ -76,3 +76,15 @@ Choose the panels and segment range with `PANELS` and `SEGMENT_VIEW` at
 the top of `visualization.py`. The video is written to
 
     outputs/visualization_components_<phenotype>_<segment_view>.mp4
+
+------------------------------------------------------------------------
+
+## Revision figures
+
+Each script below regenerates one figure from the response to the
+reviewers, written to `figures/` as PDF and SVG. Shared styling (fonts,
+DPI, line widths, colors) lives in `plot_style.py`.
+
+    python fig_phase_waveforms.py   # phase and ICC waveform vs. Eq. (1) parameters
+    python fig_state_variables.py   # W, E, M, p for one proximal and one distal segment
+    python fig_sensitivity.py       # local sensitivity heatmap (+ outputs/sensitivity.csv)
