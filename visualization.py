@@ -25,13 +25,13 @@ import matplotlib.pyplot as plt
 import matplotlib.animation as animation
 from matplotlib.colors import Normalize
 
-from pressure_traces import Geometry, SimParams, run_traces
+from pressure_traces import PHENOTYPE, SimParams, TraceResults, run_traces
 
 # =============================================================================
-# USER SETTINGS
+# User settings (the phenotype is set by PHENOTYPE in pressure_traces.py)
 # =============================================================================
-PHENOTYPE = "healthy"
-SEGMENT_VIEW = "hapc"   # "hapc" = segments 1-50 (proximal HAPC region only), "all" = every segment (1-75)
+SEGMENT_VIEW = "hapc"   # "hapc" = segments 1-50 (proximal HAPC region only),
+                        # "all" = every segment (1-75)
 OUT_FILE = f"outputs/visualization_components_{PHENOTYPE}_{SEGMENT_VIEW}.mp4"
 
 # Which panels to draw, and in what order. Any subset of PANEL_SPECS' keys below.
@@ -45,7 +45,8 @@ PANELS = ["D", "ENS", "M", "tube"]
 FIG_WIDTH_IN = 12
 FIG_HEIGHT_IN = 6
 
-PANEL_WIDTH_IN = 3.0   # auto-sizing: inches per unit of panel "width" (used when FIG_WIDTH_IN is None)
+PANEL_WIDTH_IN = 3.0   # auto-sizing: inches per unit of panel "width"
+                       # (used when FIG_WIDTH_IN is None)
 WSPACE = 0.15          # horizontal gap between panels (gridspec wspace, in axes-widths)
 LEFT_MARGIN_IN = 0.45  # room for the rotated Proximal/Distal labels
 RIGHT_MARGIN_IN = 0.12
@@ -63,19 +64,26 @@ NARROW_WIDTH_THRESHOLD = 0.5   # panels with a width_ratio below this get a rota
                                # title and no x-tick labels, since they're too thin to fit them
 
 TITLE_FONTSIZE = 11
-NARROW_TITLE_FONTSIZE = 9      # used instead of TITLE_FONTSIZE for panels below NARROW_WIDTH_THRESHOLD
+NARROW_TITLE_FONTSIZE = 9      # used instead of TITLE_FONTSIZE for panels
+                               # below NARROW_WIDTH_THRESHOLD
 LABEL_FONTSIZE = 11            # Proximal/Distal axis labels and the running time readout
 
 TUBE_CANVAS_NY = 220           # vertical raster resolution of the tube cross-section image
-TUBE_RADIUS_HEADROOM = 1.02    # Rmax = R0_CM * this, so the wall outline isn't flush with the image edge
-TUBE_XLIM_PAD = 1.15           # extra padding factor applied to the tube panel's radius axis limits
+TUBE_RADIUS_HEADROOM = 1.02    # Rmax = R0_CM * this, so the wall outline isn't flush
+                               # with the image edge
+TUBE_XLIM_PAD = 1.15           # extra padding factor on the tube panel's radius limits
 TUBE_OUTLINE_COLOR = "#333333"
 TUBE_OUTLINE_LW = 1.2
 
 TRACE_LINE_COLOR = "black"
 TRACE_LINE_LW = 0.6
+DEFAULT_LINE_LW = 2.0              # line panels without their own "lw" in PANEL_SPECS
 
-ZERO_LINE_COLOR = "#999999"        # dotted reference line at 0, for panels whose signal can go negative (e.g. ENS)
+PRESSURE_CMAP = "inferno"
+PRESSURE_CMAP_BAD_COLOR = "white"  # canvas pixels outside the tube wall
+
+ZERO_LINE_COLOR = "#999999"        # dotted reference line at 0, for panels whose signal
+                                   # can go negative (e.g. ENS)
 ZERO_LINE_LW = 0.8
 
 PRESSURE_COLOR_PERCENTILE = 99.5   # colormap vmax = this percentile of shown pressure, so a rare
@@ -86,48 +94,50 @@ FPS = 20
 VIDEO_DPI = 135
 VIDEO_BITRATE = 3000
 
-PROXIMAL_DISTAL_X_OFFSET = -0.1    # axes-fraction horizontal offset of the rotated Proximal/Distal labels
-PROXIMAL_Y_FRAC = 0.06             # fraction of the shown span where "Proximal" is anchored (near the top)
-DISTAL_Y_FRAC = 0.94               # fraction of the shown span where "Distal" is anchored (near the bottom)
+PROXIMAL_DISTAL_X_OFFSET = -0.1    # axes-fraction x offset of the rotated Proximal/Distal labels
+PROXIMAL_Y_FRAC = 0.06             # fraction of the shown span where "Proximal" sits (near top)
+DISTAL_Y_FRAC = 0.94               # fraction of the shown span where "Distal" sits (near bottom)
 
 
 # =============================================================================
 # Panel definitions: static styling/limits for each selectable panel.
 # xlim may be a fixed (lo, hi) tuple or a callable(data) -> (lo, hi).
 # =============================================================================
-def _xlim_nonneg(data):
+def _xlim_nonneg(data: np.ndarray) -> tuple[float, float]:
     # 15% headroom above the max so the peak isn't flush against the axis edge;
     # -0.02 keeps the zero line visibly inside the axis rather than right on it.
     return (-0.02, float(data.max()) * 1.15)
 
 
-def _xlim_activation(data):
+def _xlim_activation(data: np.ndarray) -> tuple[float, float]:
     # Same idea as _xlim_nonneg, but with a 0.4 floor so this panel doesn't zoom
     # in distractingly tight when activation stays small all frame.
     return (-0.02, max(0.4, float(data.max())) * 1.1)
 
 
-def _xlim_symmetric(data):
+def _xlim_symmetric(data: np.ndarray) -> tuple[float, float]:
     # Symmetric-ish padding around a signal that can be positive or negative (e.g. ENS).
     # The 1e-6 floor avoids a zero-width axis if the data is exactly flat.
-    lo = float(data.min()); hi = float(data.max())
+    lo = float(data.min())
+    hi = float(data.max())
     pad = 0.15 * max(abs(lo), abs(hi), 1e-6)
     return (lo - pad, hi + pad)
 
 
 PANEL_SPECS = {
-    "phi": dict(title="Pacemaker phase", color="#1b2a4a", xlabel=r"$\phi_s$ (rad)",
+    "phi": dict(title="Pacemaker phase", color="#1b2a4a", xlabel=r"$\phi_s$ [rad]",
                 width=1.0, xlim=(-0.3, 2 * np.pi + 0.3),   # +/-0.3 rad padding around [0, 2*pi]
-                xticks=([0, np.pi, 2 * np.pi], ["0", "π", "2π"])),
-    "W": dict(title="Pacemaker waveform", color="#127a75", xlabel=r"$W_s$",
-              width=1.0, xlim=(-0.05, 1.05)),   # +/-0.05 padding around the normalized [0, 1] waveform
-    "D": dict(title="ICC pacemakers", color="#c98a2c", xlabel=r"$D_s^{\rm ICC}$",
+                xticks=([0, np.pi, 2 * np.pi], [r"$0$", r"$\pi$", r"$2\pi$"])),
+    # +/-0.05 padding around the normalized [0, 1] waveform
+    "W": dict(title="Pacemaker waveform", color="#127a75", xlabel=r"$W_s$ [-]",
+              width=1.0, xlim=(-0.05, 1.05)),
+    "D": dict(title="ICC pacemakers", color="#c98a2c", xlabel=r"$D_s^{\rm ICC}$ [-]",
               width=1.0, xlim=_xlim_nonneg),
-    "ENS": dict(title="Peristaltic reflex", color="#4c72b0", xlabel=r"$E_s^{\rm ENS}$",
+    "ENS": dict(title="Peristaltic reflex", color="#4c72b0", xlabel=r"$E_s^{\rm ENS}$ [-]",
                 width=1.0, xlim=_xlim_symmetric, zero_line=True),
-    "E": dict(title="Total excitation", color="#a5372a", xlabel=r"$E_s$",
+    "E": dict(title="Total excitation", color="#a5372a", xlabel=r"$E_s$ [-]",
               width=1.15, xlim=_xlim_nonneg),
-    "M": dict(title="Muscle activation", color="#6a3d9a", xlabel=r"$M_s$",
+    "M": dict(title="Muscle activation", color="#6a3d9a", xlabel=r"$M_s$ [-]",
               width=1.3, xlim=_xlim_activation, lw=2.2),
     "tube": dict(title="", color="#7a4a1e", width=1.3 / 8),
     "traces": dict(title="Pressure trace over time", color="#7a4a1e", width=2.5),
@@ -137,7 +147,9 @@ PANEL_SPECS = {
 # =============================================================================
 # Animation
 # =============================================================================
-def build_canvas(radius_row, pressure_row, y_grid, N):
+def build_canvas(radius_row: np.ndarray, pressure_row: np.ndarray, y_grid: np.ndarray,
+                 N: int) -> np.ndarray:
+    """Raster (len(y_grid), N) of pressure inside the tube wall (|y| <= radius), NaN outside."""
     ny = y_grid.size
     canvas = np.full((ny, N), np.nan, dtype=float)
     r_col = radius_row[np.newaxis, :]
@@ -147,8 +159,10 @@ def build_canvas(radius_row, pressure_row, y_grid, N):
     return canvas
 
 
-def make_animation(t_rec, Phi_rec, W_rec, D_ICC_rec, ENS_rec, E_rec, M_rec, A_rec, P_rec,
-                    geom: Geometry):
+def make_animation(res: TraceResults) -> None:
+    """Render the selected PANELS for the simulated run and save the video to OUT_FILE."""
+    t_rec = res.t
+    geom = res.geom
     dx = geom.dx_cm
     if SEGMENT_VIEW == "all":
         seg_lo, seg_hi = 1, geom.N
@@ -162,15 +176,15 @@ def make_animation(t_rec, Phi_rec, W_rec, D_ICC_rec, ENS_rec, E_rec, M_rec, A_re
     y_top, y_bot = i0 * dx, i1 * dx
 
     line_data = {
-        "phi": Phi_rec[:, i0:i1],
-        "W": W_rec[:, i0:i1],
-        "D": D_ICC_rec[:, i0:i1],
-        "ENS": ENS_rec[:, i0:i1],
-        "E": E_rec[:, i0:i1],
-        "M": M_rec[:, i0:i1],
+        "phi": res.phi[:, i0:i1],
+        "W": res.W[:, i0:i1],
+        "D": res.D_ICC[:, i0:i1],
+        "ENS": res.E_ENS[:, i0:i1],
+        "E": res.E[:, i0:i1],
+        "M": res.M[:, i0:i1],
     }
-    A_s = A_rec[:, i0:i1]
-    P_s = P_rec[:, i0:i1]
+    A_s = res.A[:, i0:i1]
+    P_s = res.P[:, i0:i1]
     radius = R0_CM * np.sqrt(A_s)
 
     Tsim = SimParams().Tsim   # simulated duration (s), from pressure_traces' own SimParams default
@@ -181,8 +195,8 @@ def make_animation(t_rec, Phi_rec, W_rec, D_ICC_rec, ENS_rec, E_rec, M_rec, A_re
 
     p_vmax = float(np.percentile(P_s, PRESSURE_COLOR_PERCENTILE))
     norm = Normalize(vmin=0.0, vmax=p_vmax)
-    cmap = plt.get_cmap("inferno").copy()
-    cmap.set_bad(color="white")
+    cmap = plt.get_cmap(PRESSURE_CMAP).copy()
+    cmap.set_bad(color=PRESSURE_CMAP_BAD_COLOR)
 
     # "traces" panel: each segment's pressure offset from its own baseline position,
     # peaks pointing toward proximal (up), revealed over time like a manometry printout.
@@ -214,23 +228,26 @@ def make_animation(t_rec, Phi_rec, W_rec, D_ICC_rec, ENS_rec, E_rec, M_rec, A_re
             canvas0 = build_canvas(radius[k0], P_s[k0], y_grid, n_show).T
             im = ax.imshow(canvas0, extent=[-Rmax, Rmax, y_bot, y_top], origin="upper",
                             aspect="auto", cmap=cmap, norm=norm, interpolation="bilinear")
-            outline_top, = ax.plot(radius[k0], x_seg, color=TUBE_OUTLINE_COLOR, lw=TUBE_OUTLINE_LW)
-            outline_bot, = ax.plot(-radius[k0], x_seg, color=TUBE_OUTLINE_COLOR, lw=TUBE_OUTLINE_LW)
+            outline_top, = ax.plot(radius[k0], x_seg, color=TUBE_OUTLINE_COLOR,
+                                   lw=TUBE_OUTLINE_LW)
+            outline_bot, = ax.plot(-radius[k0], x_seg, color=TUBE_OUTLINE_COLOR,
+                                   lw=TUBE_OUTLINE_LW)
             ax.set_xlim(-Rmax * TUBE_XLIM_PAD, Rmax * TUBE_XLIM_PAD)
             if is_narrow:
                 ax.set_xticks([])
             else:
-                ax.set_xlabel("Radius (cm)")
+                ax.set_xlabel("Radius [cm]")
             artists["tube"] = {"im": im, "top": outline_top, "bot": outline_bot}
         elif key == "traces":
             trace_lines = [ax.plot([], [], color=TRACE_LINE_COLOR, lw=TRACE_LINE_LW)[0]
                             for _ in range(n_show)]
             ax.set_xlim(0, Tsim)
-            ax.set_xlabel("Time (s)")
+            ax.set_xlabel("Time [s]")
             artists["traces"] = trace_lines
         else:
             data = line_data[key]
-            line, = ax.plot(data[k0], x_seg, color=spec["color"], lw=spec.get("lw", 2.0))
+            line, = ax.plot(data[k0], x_seg, color=spec["color"],
+                            lw=spec.get("lw", DEFAULT_LINE_LW))
             xlim = spec["xlim"](data) if callable(spec["xlim"]) else spec["xlim"]
             ax.set_xlim(*xlim)
             ax.set_xlabel(spec["xlabel"])
@@ -238,7 +255,8 @@ def make_animation(t_rec, Phi_rec, W_rec, D_ICC_rec, ENS_rec, E_rec, M_rec, A_re
                 ax.axvline(0, color=ZERO_LINE_COLOR, lw=ZERO_LINE_LW, ls=":")
             if "xticks" in spec:
                 pos, labels = spec["xticks"]
-                ax.set_xticks(pos); ax.set_xticklabels(labels)
+                ax.set_xticks(pos)
+                ax.set_xticklabels(labels)
             artists[key] = line
 
         if is_narrow:
@@ -247,7 +265,8 @@ def make_animation(t_rec, Phi_rec, W_rec, D_ICC_rec, ENS_rec, E_rec, M_rec, A_re
                          color=spec["color"], rotation=90, rotation_mode="anchor",
                          ha="left", va="bottom")
         else:
-            ax.set_title(spec["title"], fontsize=TITLE_FONTSIZE, fontweight="bold", color=spec["color"])
+            ax.set_title(spec["title"], fontsize=TITLE_FONTSIZE, fontweight="bold",
+                         color=spec["color"])
         ax.spines[["top", "right"]].set_visible(False)
 
     axes[0].set_ylim(y_bot, y_top)
@@ -278,9 +297,9 @@ def make_animation(t_rec, Phi_rec, W_rec, D_ICC_rec, ENS_rec, E_rec, M_rec, A_re
         cbar_ax = fig.add_axes([right + CBAR_GAP_IN / fig_width, bottom,
                                  CBAR_WIDTH_IN / fig_width, top - bottom])
         cbar = fig.colorbar(artists["tube"]["im"], cax=cbar_ax)
-        cbar.set_label("Pressure (mmHg)")
+        cbar.set_label("Pressure [mmHg]")
 
-    def update(i):
+    def update(i: int) -> tuple:
         k = frame_idx[i]
         updated = []
         for key in PANELS:
@@ -312,8 +331,11 @@ def make_animation(t_rec, Phi_rec, W_rec, D_ICC_rec, ENS_rec, E_rec, M_rec, A_re
 
 
 if __name__ == "__main__":
-    t_rec, Phi_rec, W_rec, D_ICC_rec, ENS_rec, E_rec, M_rec, A_rec, P_rec, geom = run_traces(
-        phenotype=PHENOTYPE, write_output=False, make_plot=False)
+    # Fail before the (slow) simulation rather than after it if the video encoder is missing.
+    if not animation.writers.is_available("ffmpeg"):
+        raise SystemExit("ffmpeg not found on PATH; it is needed to write the .mp4 "
+                         "(install it, e.g. `brew install ffmpeg` or `conda install ffmpeg`).")
 
-    make_animation(t_rec, Phi_rec, W_rec, D_ICC_rec, ENS_rec, E_rec, M_rec, A_rec, P_rec, geom)
+    res = run_traces(phenotype=PHENOTYPE, write_output=False, make_plot=False)
+    make_animation(res)
     print(f"Animation saved to {OUT_FILE}")
