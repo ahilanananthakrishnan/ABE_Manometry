@@ -4,8 +4,11 @@ column) of one oscillator in a generic nearest-neighbor chain for
 variations of each parameter of the Kuramoto-type phase equation, Eq. (1)
 (response to Reviewer 1, comment 1).
 
-Rows (one parameter varied, others at representative baseline values, taken
-from the healthy CMP subnetwork):
+Each row shows the table value of one parameter and that value increased by
+50% and 100% (half the table value and zero for the coupling strength), with
+the others at the values of the healthy HAPC subnetwork (f = 0.4 cpm,
+v = 1.2 cm/s, k = 2.0 rad/s, sigma_phi = 0). The healthy phase noise is zero,
+so the noise row shows 0, 0.1, and 0.2 rad/sqrt(s):
   A intrinsic frequency f
   B preferred propagation speed v (sets the phase lag delta)
   C coupling strength k
@@ -35,10 +38,10 @@ import matplotlib.pyplot as plt
 
 import plot_style as ps
 from pressure_traces import (
+    SEED,
     Geometry,
     OscillatorHealthyBaseline,
     SimParams,
-    SEED,
     WaveformParams,
     icc_waveform_skewed,
     phase_chain_increment,
@@ -46,33 +49,32 @@ from pressure_traces import (
 )
 
 # =============================================================================
-# User settings (the phase-noise row uses SEED from pressure_traces.py; the chain
-# has as many oscillators as the CMP subnetwork)
+# User settings (the phase-noise row uses SEED from pressure_traces.py)
 # =============================================================================
 OUT_DIR = "figures"
 OUT_NAME = "fig_phase_waveforms"
-T_SHOW_S = 60.0   # [s] simulated window
+T_SHOW_S = SimParams().Tsim  # [s] simulated window (same as the model simulations)
+N_CHAIN = 25                 # [-] oscillators in the generic chain
 
-# Alternative values for each sweep; the baseline (healthy CMP subnetwork, taken from
-# pressure_traces.py) is prepended as the first, black curve
-F_ALT_CPM = (1.5, 6.0)       # [cpm] intrinsic frequency
-V_ALT_CMPS = (10.0, 20.0)    # [cm/s] preferred propagation speed
-K_ALT = (0.2, 0.0)           # [rad/s] coupling strength
-SIGMA_ALT = (0.2, 0.5)       # [rad/sqrt(s)] phase-noise amplitude
+# Sweep values: the table value (baseline, healthy HAPC subnetwork), +50%, and +100%.
+# The healthy phase noise is zero, so the noise row uses fixed values instead.
+SWEEP_FACTORS = (1.0, 1.5, 2.0)     # [-] multiples of the table value
+K_SWEEP_FACTORS = (0.0, 0.5, 1.0)   # [-] coupling strength: uncoupled, half, and table value
+SIGMA_SWEEP = (0.0, 0.1, 0.2)       # [rad/sqrt(s)] phase-noise amplitude (0 = healthy)
 
 # Figure layout (cosmetic)
 FIG_ASPECT = 1.25                    # [-] height/width
 LINE_WIDTH = 2.2                     # [pt] data lines (thicker than the shared default)
-LINE_SHADES = (ps.INK, "0.45", "0.75")  # baseline black, alternatives lighter grey
-WIDTH_RATIOS = (1.0, 1.0, 0.16)     # [-] phi column, W column, legend column
+LINE_SHADES = ("0.75", "0.45", ps.INK)  # in sweep order, so darker = larger value in every row
+WIDTH_RATIOS = (1.0, 1.0, 0.42)     # [-] phi column, W column, legend column
 LEGEND_GAP_X = 0.015                 # [figure fraction] gap between W panels and legend boxes
 LEGEND_FRAME_WIDTH = 0.8             # [pt] legend box line width
+LEGEND_HANDLE_LENGTH = 1.0           # [font sizes] length of the legend line samples
 TITLE_GAP = 0.006                    # [figure fraction] gap between row title and panels
 ROW_LABEL_X = 0.01                   # [figure fraction] x position of row letters
 TIGHT_RECT = (0.03, 0.0, 1.0, 0.97)  # [figure fraction] room for the top title and letters
 H_PAD = 2.6                          # [font sizes] vertical space for the row titles
 W_PAD = 0.5                          # [font sizes] horizontal space between panels
-LEGEND_HANDLE_LENGTH = 1.0           # [font sizes] length of the legend line samples
 
 
 # =============================================================================
@@ -117,18 +119,21 @@ def make_figure() -> None:
     healthy = phenotype_params("healthy")
     dt = SimParams().dt
 
-    n_chain = geom.N - geom.N_HAPC
-
-    baseline = dict(f_cpm=base.f_cmp_cpm, k=healthy.k_cmp, v_cmps=base.v_cmp_cmps,
+    baseline = dict(f_cpm=base.f_hapc_cpm, k=healthy.k_hapc, v_cmps=healthy.v_hapc_cmps,
                     sigma_phi=healthy.sigma_phi)
+    sweep = dict(
+        f_cpm=tuple(fac * baseline["f_cpm"] for fac in SWEEP_FACTORS),
+        v_cmps=tuple(fac * baseline["v_cmps"] for fac in SWEEP_FACTORS),
+        k=tuple(fac * baseline["k"] for fac in K_SWEEP_FACTORS),
+        sigma_phi=SIGMA_SWEEP,
+    )
     rows: List[Tuple[str, str, Sequence[float]]] = [
-        ("f_cpm", r"Intrinsic frequency $f_\kappa$ [cpm]", F_ALT_CPM),
+        ("f_cpm", r"Intrinsic frequency $f_\kappa$ [cpm]", sweep["f_cpm"]),
         ("v_cmps", r"Propagation speed $v_\kappa$ [cm/s], sets phase lag $\delta_\kappa$",
-         V_ALT_CMPS),
-        ("k", r"Coupling strength $k_\kappa$ [rad/s]", K_ALT),
-        ("sigma_phi", r"Phase noise $\sigma_\phi$ [rad/$\sqrt{\mathrm{s}}$]", SIGMA_ALT),
+         sweep["v_cmps"]),
+        ("k", r"Coupling strength $k_\kappa$ [rad/s]", sweep["k"]),
+        ("sigma_phi", r"Phase noise $\sigma_\phi$ [rad/$\sqrt{\mathrm{s}}$]", sweep["sigma_phi"]),
     ]
-    rows = [(key, title, (baseline[key],) + tuple(alt)) for key, title, alt in rows]
 
     wf = WaveformParams()
     row_handles = []
@@ -141,11 +146,15 @@ def make_figure() -> None:
         n_dec = max(len(f"{v:g}".partition(".")[2]) for v in values)
         for val, shade in zip(values, LINE_SHADES):
             rng = np.random.default_rng(SEED)
-            t, phi = simulate_phase_chain(n_chain, retrograde=False, dx_cm=geom.dx_cm,
+            t, phi = simulate_phase_chain(N_CHAIN, retrograde=False, dx_cm=geom.dx_cm,
                                           dt=dt, t_end=T_SHOW_S, rng=rng,
                                           **dict(baseline, **{key: val}))
-            handles += ax_phi.plot(t, break_wraps(phi[:, -1]), color=shade,
-                                   linewidth=LINE_WIDTH, label=f"{val:.{n_dec}f}")
+            label = f"{val:.{n_dec}f}"
+            if np.isclose(val, baseline[key]):
+                label += " (baseline)"  # healthy HAPC value from Tables 1 and 2
+            line, = ax_phi.plot(t, break_wraps(phi[:, -1]), color=shade,
+                                linewidth=LINE_WIDTH, label=label)
+            handles.append((val, line))
             ax_w.plot(t, icc_waveform_skewed(phi[:, -1], wf), color=shade, linewidth=LINE_WIDTH,
                       clip_on=False)  # W_s reaches the upper limit exactly
         ax_phi.set_ylim(0.0, 2.0 * np.pi)
@@ -160,7 +169,7 @@ def make_figure() -> None:
             ax.set_xticks([0.0, 0.5 * T_SHOW_S, T_SHOW_S])
         ax_leg.axis("off")  # reserves space; legends are placed after tight_layout
         # legend lists the largest value at the top
-        row_handles.append(sorted(handles, key=lambda h: float(h.get_label()), reverse=True))
+        row_handles.append([h for _, h in sorted(handles, key=lambda vh: vh[0], reverse=True)])
     for ax in axes[-1, :2]:
         ax.set_xlabel("Time [s]")
 
