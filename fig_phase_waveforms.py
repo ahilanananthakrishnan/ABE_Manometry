@@ -67,8 +67,7 @@ FIG_ASPECT = 1.25                    # [-] height/width
 LINE_WIDTH = 2.2                     # [pt] data lines (thicker than the shared default)
 LINE_SHADES = ("0.75", "0.45", ps.INK)  # in sweep order, so darker = larger value in every row
 WIDTH_RATIOS = (1.0, 1.0, 0.42)     # [-] phi column, W column, legend column
-LEGEND_GAP_X = 0.015                 # [figure fraction] gap between W panels and legend boxes
-LEGEND_FRAME_WIDTH = 0.8             # [pt] legend box line width
+LEGEND_GAP_X = 0.015                 # [figure fraction] gap between W panels and legends
 LEGEND_HANDLE_LENGTH = 1.0           # [font sizes] length of the legend line samples
 TITLE_GAP = 0.006                    # [figure fraction] gap between row title and panels
 ROW_LABEL_X = 0.01                   # [figure fraction] x position of row letters
@@ -176,16 +175,15 @@ def make_figure() -> None:
     fig.tight_layout(rect=TIGHT_RECT, h_pad=H_PAD, w_pad=W_PAD)
 
     # Row titles centered over the two data columns, and row letters at the left
-    # One boxed legend per row, entries stacked vertically, just right of the W panel
+    # One unboxed legend per row, entries stacked vertically, just right of the W panel
     extra_artists = []  # kept in the saved bounding box
     for (ax_phi, ax_w, _), (_, title, _), handles, letter in zip(axes, rows, row_handles,
                                                                    "ABCD"):
         left, right = ax_phi.get_position(), ax_w.get_position()
         leg = fig.legend(handles=handles, loc="center left",
                          bbox_to_anchor=(right.x1 + LEGEND_GAP_X, 0.5 * (right.y0 + right.y1)),
-                         ncol=1, frameon=True, fancybox=False, edgecolor=ps.INK,
-                         handlelength=LEGEND_HANDLE_LENGTH, borderaxespad=0.0)
-        leg.get_frame().set_linewidth(LEGEND_FRAME_WIDTH)
+                         ncol=1, frameon=False, handlelength=LEGEND_HANDLE_LENGTH,
+                         borderaxespad=0.0)
         extra_artists.append(leg)
         extra_artists.append(fig.text(0.5 * (left.x0 + right.x1), left.y1 + TITLE_GAP, title,
                                       ha="center", va="bottom"))
