@@ -4,20 +4,18 @@ DPI, fonts, line widths, and colors).
 
 Matches the existing manuscript figures (made with the lab MATLAB template
 ``set_figure_template`` and LaTeX interpreter): Computer Modern text and math,
-19 pt axis text, 1.44 pt axes lines, inward ticks, box on, no grid, square axes,
-black line art. Units go in square brackets per the lab
-convention (e.g. ``Time [s]``, ``[-]`` for dimensionless). Each axes is sized like the template's
-600 x 500 px MATLAB figure, so a multi-panel figure is built large and scaled
-down to the text width in LaTeX (font size relative to the panel is preserved).
+inward ticks, box on, no grid, and black line art, with the font size and line
+widths below measured from the submitted figures. Units go in square brackets
+per the lab convention (e.g. ``Time [s]``, ``[-]`` for dimensionless). Figures
+are built at FIG_WIDTH_IN and scaled down to the text width in LaTeX (font size
+relative to the panel is preserved).
 
-Import and call ``apply_style()`` before creating a figure, and
-``style_axes(ax)`` on every axes after plotting.
+Import and call ``apply_style()`` before creating a figure.
 """
 
 from __future__ import annotations
 
 import matplotlib as mpl
-import matplotlib.pyplot as plt
 
 # =============================================================================
 # Shared settings (measured from the submitted Figs 2-3, i.e. revised Figs 3-4)
@@ -28,10 +26,7 @@ FONT_SIZE = 17             # [pt] axis labels and tick labels at native size
 LEGEND_FONT_SIZE = 17      # [pt] legend text
 PANEL_LABEL_SIZE = 17      # [pt] panel letters (A, B, ...)
 AXIS_LINE_WIDTH = 1.0      # [pt] axes box and ticks
-LINE_WIDTH = 1.5           # [pt] single data curves
-TRACE_LINE_WIDTH = 0.6     # [pt] stacked traces, as in the pressure maps
 INK = "black"              # text and axis color
-INK_MUTED = "0.55"         # grey for reference markers
 SERIF_FONTS = ["cmr10", "Computer Modern Roman"]  # LaTeX default font, as in Figs 1-3
 
 
@@ -66,11 +61,3 @@ def apply_style() -> None:
         "savefig.bbox": "tight",
         "savefig.pad_inches": 0.05,
     })
-
-
-def style_axes(ax: plt.Axes) -> None:
-    """Per-axes part of the template: box on and square axes."""
-    for spine in ax.spines.values():
-        spine.set_visible(True)
-        spine.set_linewidth(AXIS_LINE_WIDTH)
-    ax.set_box_aspect(1.0)

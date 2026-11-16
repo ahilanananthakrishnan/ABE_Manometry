@@ -42,6 +42,7 @@ MAKE_PLOT = True
 # =============================================================================
 @dataclass(frozen=True)
 class PhenotypeParams:
+    """Parameters that differ between the healthy, IBS-D, and STC cases."""
     a_hapc: float        # [-] HAPC pacemaker amplitude
     brake_enabled: bool  # [-] rectosigmoid brake active
     k_hapc: float        # [rad/s] coupling strength (HAPC)
@@ -50,20 +51,25 @@ class PhenotypeParams:
     sigma_phi: float     # [rad/sqrt(s)] phase noise amplitude
 
 
+def normalize_phenotype(phenotype: str) -> str:
+    """Phenotype label in canonical form ('Healthy ' -> 'healthy')."""
+    return phenotype.strip().lower()
+
+
 def phenotype_params(phenotype: str) -> PhenotypeParams:
     """Return the case-specific parameters for 'healthy', 'ibsd', or 'stc' (case-insensitive)."""
-    label = phenotype.strip().lower()
+    label = normalize_phenotype(phenotype)
     if label == "healthy":
         return PhenotypeParams(a_hapc=0.77, brake_enabled=True, k_hapc=2.0, k_cmp=2.0,
-                                v_hapc_cmps=1.2, sigma_phi=0.0)
+                               v_hapc_cmps=1.2, sigma_phi=0.0)
     elif label == "ibsd":
         # brake disabled (Gamma_CMP ≡ 1)
         return PhenotypeParams(a_hapc=0.70, brake_enabled=False, k_hapc=2.0, k_cmp=2.0,
-                                v_hapc_cmps=5.0, sigma_phi=0.0)
+                               v_hapc_cmps=5.0, sigma_phi=0.0)
     elif label == "stc":
         # weak coupling, added noise
         return PhenotypeParams(a_hapc=0.62, brake_enabled=True, k_hapc=0.2, k_cmp=0.2,
-                                v_hapc_cmps=1.1, sigma_phi=0.5)
+                               v_hapc_cmps=1.1, sigma_phi=0.5)
     else:
         raise ValueError("PHENOTYPE must be one of: 'healthy', 'ibsd', 'stc'")
 
@@ -73,17 +79,20 @@ def phenotype_params(phenotype: str) -> PhenotypeParams:
 # =============================================================================
 @dataclass(frozen=True)
 class Geometry:
+    """Discretization of the colon into a chain of equal segments."""
     L_cm: float = 150.0   # [cm] total colon length
     N: int = 75           # [-] number of segments
     N_HAPC: int = 50      # [-] proximal boundary (splenic flexure index in chain)
 
     @property
     def dx_cm(self) -> float:
+        """Segment length [cm]."""
         return self.L_cm / self.N
 
 
 @dataclass(frozen=True)
 class WaveformParams:
+    """Shape of the ICC waveform W(phi)."""
     phi_duty: float = 0.10  # [-] duty fraction of 2π
     gamma: float = 2.0      # [-] upstroke sharpness
     k_w: float = 8.0        # [-] decay constant
@@ -91,6 +100,7 @@ class WaveformParams:
 
 @dataclass(frozen=True)
 class TubeLawParams:
+    """Contraction curve C(M) and tube law p(A)."""
     k_c: float = 6.0      # [-] contraction curve steepness
     M50: float = 0.30     # [-] contraction curve midpoint
     beta_C: float = 0.80  # [-] max fractional area reduction
@@ -101,6 +111,7 @@ class TubeLawParams:
 
 @dataclass(frozen=True)
 class MuscleParams:
+    """Time constants of the excitation filter and muscle activation."""
     tau_E: float = 1.0     # [s] excitatory filter constant
     tau_on: float = 1.0    # [s] contraction time constant
     tau_off: float = 1.2   # [s] relaxation time constant
@@ -108,12 +119,14 @@ class MuscleParams:
 
 @dataclass(frozen=True)
 class ENSParams:
+    """Enteric (peristaltic) reflex gains."""
     alpha_asc: float = 0.10   # [-] ascending (oral) reflex gain
     alpha_desc: float = 0.08  # [-] descending (anal) reflex gain
 
 
 @dataclass(frozen=True)
 class OscillatorHealthyBaseline:
+    """Pacemaker parameters shared by all phenotypes (healthy values)."""
     f_hapc_cpm: float = 0.4  # [cpm] HAPC pacemaker frequency
     f_cmp_cpm: float = 3.0   # [cpm] CMP pacemaker frequency
     a_cmp: float = 0.75      # [-] CMP pacemaker amplitude
@@ -124,6 +137,7 @@ class OscillatorHealthyBaseline:
 
 @dataclass(frozen=True)
 class BrakeParams:
+    """Pressure-gated rectosigmoid brake with hysteresis."""
     F_sense_1based: Tuple[int, int] = (40, 65)  # [-] sensing field (1-based inclusive)
     p_on: float = 50.0   # [mmHg] brake ON threshold
     p_off: float = 20.0  # [mmHg] brake OFF threshold
@@ -131,22 +145,26 @@ class BrakeParams:
 
     @property
     def F_sense_idx(self) -> np.ndarray:
+        """0-based indices of the sensing segments."""
         lo, hi = self.F_sense_1based
         return np.arange(lo - 1, hi)
 
 
 @dataclass(frozen=True)
 class SimParams:
-    dt: float = 0.05     # [s] time step
-    Tsim: float = 150.0  # [s] total simulated time
+    """Time integration settings."""
+    dt: float = 0.05      # [s] time step
+    t_sim: float = 150.0  # [s] total simulated time
 
     @property
     def n_run(self) -> int:
-        return int(round(self.Tsim / self.dt))
+        """Number of time steps."""
+        return int(round(self.t_sim / self.dt))
 
 
 @dataclass(frozen=True)
 class PlotParams:
+    """Settings of the quick-look stacked-trace plot."""
     center_traces: bool = True         # [-] subtract each trace's median before stacking
     trace_gain: float = 1.2            # [-] vertical scaling of each trace
     offset_fixed_mmHg: float = 20.0    # [mmHg] vertical spacing between stacked traces
@@ -162,7 +180,7 @@ class PlotParams:
 
 
 class TraceResults(NamedTuple):
-    """Recorded time histories from run_traces; each array is (n_steps, N) except t."""
+    """Recorded time histories from run_traces; each array is (n_steps, N) except t and gate."""
     t: np.ndarray        # [s] time
     phi: np.ndarray      # [rad] pacemaker phase, wrapped to [0, 2π)
     W: np.ndarray        # [-] ICC waveform
@@ -173,6 +191,7 @@ class TraceResults(NamedTuple):
     A: np.ndarray        # [-] normalized cross-sectional area
     P: np.ndarray        # [mmHg] pressure
     geom: "Geometry"
+    gate: np.ndarray     # [-] distal brake gate Gamma_CMP: 1 = open, 0 = brake ON (n_steps,)
 
 
 ParameterGroups = Tuple[PhenotypeParams, OscillatorHealthyBaseline, WaveformParams, ENSParams,
@@ -301,7 +320,7 @@ def plot_traces_equal_spacing(t: np.ndarray, P: np.ndarray, title: str, pp: Plot
 # =============================================================================
 def run_traces(phenotype: str = PHENOTYPE, write_output: bool = True,
                make_plot: bool = MAKE_PLOT, seed: Optional[int] = SEED,
-               out_txt: Optional[str] = OUT_TXT, gate_out: Optional[list] = None,
+               out_txt: Optional[str] = OUT_TXT,
                overrides: Optional[Dict[str, float]] = None,
                random_phase_seed: Optional[int] = None,
                dt: Optional[float] = None) -> TraceResults:
@@ -309,8 +328,6 @@ def run_traces(phenotype: str = PHENOTYPE, write_output: bool = True,
 
     ``seed`` seeds NumPy's global RNG (only affects phenotypes with phase noise).
     ``out_txt`` defaults to '<phenotype>_pressure_traces.txt' in the current directory.
-    If ``gate_out`` is a list, the distal brake gate Gamma_CMP(t) (1 = open,
-    0 = brake ON) is appended to it as an array, one value per time step.
     ``overrides`` maps parameter field names (e.g. ``"k_w"``, ``"a_hapc"``) to
     new values; it is used by the sensitivity analysis.
     If ``random_phase_seed`` is given, all initial phases are drawn uniformly
@@ -318,7 +335,7 @@ def run_traces(phenotype: str = PHENOTYPE, write_output: bool = True,
     (used to check that the phase-locked state does not depend on them).
     ``dt`` overrides the time step [s] (used for the time-step convergence check).
     """
-    ph = phenotype.strip().lower()
+    ph = normalize_phenotype(phenotype)
     case, base, wf, ens, mus, brk = parameter_groups(phenotype, overrides)
 
     geom = Geometry()
@@ -378,6 +395,9 @@ def run_traces(phenotype: str = PHENOTYPE, write_output: bool = True,
     t_rec = np.arange(sim.n_run) * sim.dt
     gate_rec = np.ones(sim.n_run, dtype=float)
 
+    # Area at the start of each step (updated from the recorded area at the end of the step)
+    A_prev = area_from_M(M, tube)
+
     # Per-step constants
     sd = case.sigma_phi * np.sqrt(sim.dt)  # Euler-Maruyama noise scale: sigma_phi * sqrt(dt)
     aP = sim.dt / brk.tau_P
@@ -385,24 +405,20 @@ def run_traces(phenotype: str = PHENOTYPE, write_output: bool = True,
 
     for k in range(sim.n_run):
 
-        # Nearest-neighbor coupling: HAPC anterograde (s-1), CMP retrograde (s+1)
-        dphi_H = np.zeros(N, dtype=float)
-        dphi_C = np.zeros(N, dtype=float)
-        dphi_H[:N_HAPC] = phase_chain_increment(phi_H[:N_HAPC], omega_hapc, case.k_hapc,
-                                                delta_hapc, retrograde=False, dt=sim.dt)
-        dphi_C[N_HAPC:] = phase_chain_increment(phi_C[N_HAPC:], omega_cmp, case.k_cmp,
-                                                delta_cmp, retrograde=True, dt=sim.dt)
+        # Nearest-neighbor coupling: HAPC anterograde (s-1), CMP retrograde (s+1),
+        # evaluated before the noise is added
+        dphi_H = phase_chain_increment(phi_H[:N_HAPC], omega_hapc, case.k_hapc,
+                                       delta_hapc, retrograde=False, dt=sim.dt)
+        dphi_C = phase_chain_increment(phi_C[N_HAPC:], omega_cmp, case.k_cmp,
+                                       delta_cmp, retrograde=True, dt=sim.dt)
 
         # Phase noise (applied within each subnetwork)
         if sd > 0.0:
             phi_H[:N_HAPC] += sd * np.random.randn(N_HAPC)
             phi_C[N_HAPC:] += sd * np.random.randn(N - N_HAPC)
 
-        phi_H += dphi_H
-        phi_C += dphi_C
-
-        # Area and pressure from the muscle state at the start of this step
-        A_prev = area_from_M(M, tube)
+        phi_H[:N_HAPC] += dphi_H
+        phi_C[N_HAPC:] += dphi_C
 
         # Rectosigmoid brake: pressure-gated binary distal switch (hysteresis p_on/p_off)
         if case.brake_enabled:
@@ -463,6 +479,7 @@ def run_traces(phenotype: str = PHENOTYPE, write_output: bool = True,
         A_rec[k, :] = area_from_M(M, tube)
         P_rec[k, :] = pressure_from_A(A_rec[k], tube)
         gate_rec[k] = 1.0 if cmp_enabled else 0.0
+        A_prev = A_rec[k]
 
     maxP = float(np.max(P_rec))
     print(f"Max pressure across all sensors ({ph.upper()} model): {maxP:.3f} mmHg")
@@ -482,11 +499,8 @@ def run_traces(phenotype: str = PHENOTYPE, write_output: bool = True,
             pp=pp,
         )
 
-    if gate_out is not None:
-        gate_out.append(gate_rec)
-
     return TraceResults(t_rec, Phi_rec, W_rec, D_ICC_rec, ENS_rec, E_rec, M_rec, A_rec, P_rec,
-                        geom)
+                        geom, gate_rec)
 
 
 if __name__ == "__main__":

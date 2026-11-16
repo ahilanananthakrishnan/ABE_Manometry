@@ -6,9 +6,9 @@ variations of each parameter of the Kuramoto-type phase equation, Eq. (1)
 
 Each row shows the table value of one parameter and that value increased by
 50% and 100% (half the table value and zero for the coupling strength), with
-the others at the values of the healthy HAPC subnetwork (f = 0.4 cpm,
-v = 1.2 cm/s, k = 2.0 rad/s, sigma_phi = 0). The healthy phase noise is zero,
-so the noise row shows 0, 0.1, and 0.2 rad/sqrt(s):
+the others at the values of the healthy HAPC subnetwork (Tables 1 and 2, read
+from pressure_traces.py). The healthy phase noise is zero, so the noise row
+uses the fixed values in SIGMA_SWEEP:
   A intrinsic frequency f
   B preferred propagation speed v (sets the phase lag delta)
   C coupling strength k
@@ -28,6 +28,7 @@ Output:
 from __future__ import annotations
 
 import os
+import string
 from typing import List, Sequence, Tuple
 
 import numpy as np
@@ -53,7 +54,7 @@ from pressure_traces import (
 # =============================================================================
 OUT_DIR = "figures"
 OUT_NAME = "fig_phase_waveforms"
-T_SHOW_S = SimParams().Tsim  # [s] simulated window (same as the model simulations)
+T_SHOW_S = SimParams().t_sim  # [s] simulated window (same as the model simulations)
 N_CHAIN = 25                 # [-] oscillators in the generic chain
 
 # Sweep values: the table value (baseline, healthy HAPC subnetwork), +50%, and +100%.
@@ -64,7 +65,7 @@ SIGMA_SWEEP = (0.0, 0.1, 0.2)       # [rad/sqrt(s)] phase-noise amplitude (0 = h
 
 # Figure layout (cosmetic)
 FIG_ASPECT = 1.25                    # [-] height/width
-LINE_WIDTH = 2.2                     # [pt] data lines (thicker than the shared default)
+LINE_WIDTH = 2.2                     # [pt] data lines
 LINE_SHADES = ("0.75", "0.45", ps.INK)  # in sweep order, so darker = larger value in every row
 WIDTH_RATIOS = (1.0, 1.0, 0.42)     # [-] phi column, W column, legend column
 LEGEND_GAP_X = 0.015                 # [figure fraction] gap between W panels and legends
@@ -144,6 +145,7 @@ def make_figure() -> None:
         # same number of decimals for all values in a row (e.g. 0.0, 0.2, 2.0)
         n_dec = max(len(f"{v:g}".partition(".")[2]) for v in values)
         for val, shade in zip(values, LINE_SHADES):
+            # same seed for every curve, so the noise row differs only in sigma_phi
             rng = np.random.default_rng(SEED)
             t, phi = simulate_phase_chain(N_CHAIN, retrograde=False, dx_cm=geom.dx_cm,
                                           dt=dt, t_end=T_SHOW_S, rng=rng,
@@ -177,8 +179,8 @@ def make_figure() -> None:
     # Row titles centered over the two data columns, and row letters at the left
     # One unboxed legend per row, entries stacked vertically, just right of the W panel
     extra_artists = []  # kept in the saved bounding box
-    for (ax_phi, ax_w, _), (_, title, _), handles, letter in zip(axes, rows, row_handles,
-                                                                   "ABCD"):
+    for (ax_phi, ax_w, _), (_, title, _), handles, letter in zip(
+            axes, rows, row_handles, string.ascii_uppercase):
         left, right = ax_phi.get_position(), ax_w.get_position()
         leg = fig.legend(handles=handles, loc="center left",
                          bbox_to_anchor=(right.x1 + LEGEND_GAP_X, 0.5 * (right.y0 + right.y1)),

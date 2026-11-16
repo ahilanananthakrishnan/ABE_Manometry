@@ -34,7 +34,7 @@ OUT_NAME = "fig_state_variables"
 PHENOTYPE = "healthy"
 SEG_PROXIMAL = 25   # [-] HAPC segment shown (1-based)
 SEG_DISTAL = 63     # [-] CMP segment shown (1-based)
-X_LIM_S = (0.0, SimParams().Tsim)  # [s] time axis (simulated duration)
+X_LIM_S = (0.0, SimParams().t_sim)  # [s] time axis (simulated duration)
 Y_UNIT = (0.0, 1.0)             # [-] axis range of the normalized variables
 Y_PRESSURE_MMHG = (0.0, 150.0)  # [mmHg] pressure axis, same in both columns
 
@@ -61,10 +61,9 @@ def gate_intervals(t: np.ndarray, gate: np.ndarray) -> List[Tuple[float, float]]
 def make_figure() -> None:
     """Build the figure and save it as PDF and SVG."""
     ps.apply_style()
-    gate_out: list = []
-    res = run_traces(PHENOTYPE, write_output=False, make_plot=False, gate_out=gate_out)
+    res = run_traces(PHENOTYPE, write_output=False, make_plot=False)
     t = res.t
-    brake_on = gate_intervals(t, gate_out[0])
+    brake_on = gate_intervals(t, res.gate)
 
     rows = [  # (data, label, (ymin, ymax)); min, middle, and max are ticked
         (res.W, r"$W_s$ [-]", Y_UNIT),

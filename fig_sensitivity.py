@@ -112,10 +112,12 @@ def outputs(phenotype: str, overrides: Optional[Dict[str, float]] = None) -> np.
     return np.array([res.P.max(), res.P.sum() * (res.t[1] - res.t[0])])
 
 
-def central_sensitivity(phenotype: str, h: float) -> np.ndarray:
-    """Normalized central-difference sensitivities (n_outputs x n_parameters)."""
-    base = baseline_values(phenotype)
-    y0 = outputs(phenotype)
+def central_sensitivity(phenotype: str, h: float, base: Dict[str, float],
+                        y0: np.ndarray) -> np.ndarray:
+    """Normalized central-difference sensitivities (n_outputs x n_parameters).
+
+    ``base`` holds the unperturbed parameter values and ``y0`` the unperturbed outputs.
+    """
     S = np.zeros((len(OUTPUT_LABELS), len(PARAMETERS)))
     for j, (name, _) in enumerate(PARAMETERS):
         y_plus = outputs(phenotype, {name: base[name] * (1.0 + h)})
@@ -143,14 +145,17 @@ def write_csv(results: Dict[float, np.ndarray]) -> None:
 # =============================================================================
 def make_figure() -> None:
     """Compute the sensitivities, write the CSV, and save the figure as PDF and SVG."""
-    results = {h: central_sensitivity(PHENOTYPE, h) for h in H_CHECK}
+    base = baseline_values(PHENOTYPE)
+    y0 = outputs(PHENOTYPE)
+    results = {h: central_sensitivity(PHENOTYPE, h, base, y0) for h in H_CHECK}
     write_csv(results)
     S = results[H_REPORT]
 
     ps.apply_style()
     levels = np.linspace(-S_LIM, S_LIM, N_LEVELS + 1)   # discrete color levels
-    if np.max(np.abs(S)) > S_LIM:
-        raise ValueError(f"max |S| = {np.max(np.abs(S)):.3f} exceeds S_LIM = {S_LIM}; "
+    S_max = float(np.max(np.abs(S)))
+    if S_max > S_LIM:
+        raise ValueError(f"max |S| = {S_max:.3f} exceeds S_LIM = {S_LIM}; "
                          "increase S_LIM so no cell is clipped")
     norm = BoundaryNorm(levels, plt.get_cmap(CMAP).N)
     blocks = [slice(0, N_SPLIT), slice(N_SPLIT, len(PARAMETERS))]
