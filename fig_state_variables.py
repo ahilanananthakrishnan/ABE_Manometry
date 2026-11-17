@@ -10,6 +10,10 @@ Usage:
     python fig_state_variables.py
 Output:
     figures/fig_state_variables.pdf and figures/fig_state_variables.svg
+
+Author: Ahilan Anantha Krishnan
+Units: length [cm], time [s], pressure [mmHg], phase [rad], frequency [cpm]
+Dimension: 1D chain of colon segments
 """
 
 from __future__ import annotations

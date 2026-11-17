@@ -23,6 +23,10 @@ Usage:
     python fig_phase_waveforms.py
 Output:
     figures/fig_phase_waveforms.pdf and figures/fig_phase_waveforms.svg
+
+Author: Ahilan Anantha Krishnan
+Units: length [cm], time [s], pressure [mmHg], phase [rad], frequency [cpm]
+Dimension: 1D chain of colon segments
 """
 
 from __future__ import annotations

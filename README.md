@@ -90,12 +90,19 @@ DPI, line widths, colors) lives in `plot_style.py`.
     python fig_state_variables.py   # W, E, M, p for one proximal and one distal segment
     python fig_sensitivity.py       # local sensitivity heatmap (+ outputs/sensitivity.csv)
 
-The robustness checks quoted in the text (time-step halving, random initial
-phases, 10 noise realizations of STC and of healthy with sigma = 0.1, and the
-neighbor phase-difference SDs) are printed and written to
+The robustness checks quoted in the text (three time-step halvings with L2,
+peak, motility-index, and brake-fraction comparisons; random initial phases;
+10 noise realizations of STC and of healthy with sigma = 0.1; and the neighbor
+phase-difference SDs after a 30 s transient) are printed and written to
 `outputs/robustness_checks.csv` by
 
     python robustness_checks.py
 
 This repository does not contain the code for the power-spectra and
 clinical-comparison figures.
+
+------------------------------------------------------------------------
+
+## License
+
+GNU General Public License v3.0; see [LICENSE](LICENSE).

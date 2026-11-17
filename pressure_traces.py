@@ -16,6 +16,10 @@ Regions:
 Rectosigmoid brake:
   Pressure-sensing field over segments [40,65] (1-based, inclusive) controls a binary
   distal gate that suppresses distal excitation when pressure is high.
+
+Author: Ahilan Anantha Krishnan
+Units: length [cm], time [s], pressure [mmHg], phase [rad], frequency [cpm]
+Dimension: 1D chain of colon segments
 """
 
 from __future__ import annotations
@@ -192,6 +196,11 @@ class TraceResults(NamedTuple):
     P: np.ndarray        # [mmHg] pressure
     geom: "Geometry"
     gate: np.ndarray     # [-] distal brake gate Gamma_CMP: 1 = open, 0 = brake ON (n_steps,)
+
+
+def motility_index(res: TraceResults) -> float:
+    """Motility index [mmHg s]: area under the pressure-time curve summed over all segments."""
+    return float(res.P.sum() * (res.t[1] - res.t[0]))
 
 
 ParameterGroups = tuple[PhenotypeParams, OscillatorHealthyBaseline, WaveformParams, ENSParams,

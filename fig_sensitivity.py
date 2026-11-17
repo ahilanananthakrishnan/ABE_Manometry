@@ -22,6 +22,10 @@ Usage:
 Output:
     figures/fig_sensitivity.pdf, figures/fig_sensitivity.svg,
     outputs/sensitivity.csv
+
+Author: Ahilan Anantha Krishnan
+Units: length [cm], time [s], pressure [mmHg], phase [rad], frequency [cpm]
+Dimension: 1D chain of colon segments
 """
 
 from __future__ import annotations
@@ -104,7 +108,7 @@ def outputs(phenotype: str, overrides: dict[str, float] | None = None) -> np.nda
     """Peak pressure [mmHg] and motility index [mmHg s] of one simulation."""
     res = pt.run_traces(phenotype, write_output=False, make_plot=False,
                         overrides=overrides, verbose=False)
-    return np.array([res.P.max(), res.P.sum() * (res.t[1] - res.t[0])])
+    return np.array([res.P.max(), pt.motility_index(res)])
 
 
 def central_sensitivity(phenotype: str, h: float, base: dict[str, float],

@@ -12,6 +12,10 @@ relative to the panel is preserved).
 
 Import and call ``apply_style()`` before creating a figure, and save it with
 ``save_figure(fig, name)``.
+
+Author: Ahilan Anantha Krishnan
+Units: figure size [in], fonts and line widths [pt]
+Dimension: not applicable (plot styling)
 """
 
 from __future__ import annotations
