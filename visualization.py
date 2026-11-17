@@ -18,7 +18,7 @@ Units: length (cm)
 from __future__ import annotations
 
 import os
-from typing import Sequence
+from collections.abc import Sequence
 
 import numpy as np
 import matplotlib
@@ -27,6 +27,7 @@ import matplotlib.pyplot as plt
 import matplotlib.animation as animation
 from matplotlib.colors import Normalize
 
+from plot_style import OUTPUT_DIR
 from pressure_traces import PHENOTYPE, SimParams, TraceResults, run_traces
 
 # =============================================================================
@@ -34,7 +35,6 @@ from pressure_traces import PHENOTYPE, SimParams, TraceResults, run_traces
 # =============================================================================
 # "hapc" = segments 1-50 (proximal HAPC region only), "all" = every segment (1-75)
 SEGMENT_VIEW = "hapc"
-OUT_DIR = "outputs"
 
 # Which panels to draw, and in what order. Any subset of PANEL_SPECS' keys below.
 PANELS = ["D", "ENS", "M", "tube"]
@@ -60,6 +60,9 @@ CBAR_WIDTH_IN = 0.15
 CBAR_LABEL_IN = 0.45   # extra room for the colorbar's own axis label
 
 # --- Style / rendering constants ---
+# The video has its own style on purpose: it is a screen explainer, not a paper figure, so it
+# uses a sans-serif look, smaller fonts, and one color per panel (matching each panel's title)
+# instead of plot_style's black-ink manuscript template.
 R0_CM = 2.5                    # resting tube radius (cm)
 TRACE_GAIN_CM = 20.0           # vertical excursion (cm) of the "traces" panel at peak pressure
 # Panels with a width_ratio below this get a rotated title and no x-tick labels,
@@ -67,6 +70,7 @@ TRACE_GAIN_CM = 20.0           # vertical excursion (cm) of the "traces" panel a
 NARROW_WIDTH_THRESHOLD = 0.5
 
 TITLE_FONTSIZE = 11
+TUBE_PANEL_WIDTH = 1.3 / 8     # tube column = 1/8 of the muscle-activation panel width
 NARROW_TITLE_FONTSIZE = 9      # replaces TITLE_FONTSIZE below NARROW_WIDTH_THRESHOLD
 LABEL_FONTSIZE = 11            # Proximal/Distal axis labels and the running time readout
 
@@ -93,7 +97,7 @@ PRESSURE_COLOR_PERCENTILE = 99.5
 
 FRAME_STRIDE = 10
 FPS = 20
-VIDEO_DPI = 135
+VIDEO_DPI = 135                # [dots/in] sets the video size (~1620 x 810 px), not print DPI
 VIDEO_BITRATE = 3000
 
 PROXIMAL_DISTAL_X_OFFSET = -0.1    # axes-fraction x offset of the rotated Proximal/Distal labels
@@ -141,7 +145,7 @@ PANEL_SPECS = {
               width=1.15, xlim=_xlim_nonneg),
     "M": dict(title="Muscle activation", color="#6a3d9a", xlabel=r"$M_s$ [-]",
               width=1.3, xlim=_xlim_activation, lw=2.2),
-    "tube": dict(title="", color="#7a4a1e", width=1.3 / 8),
+    "tube": dict(title="", width=TUBE_PANEL_WIDTH),
     "traces": dict(title="Pressure trace over time", color="#7a4a1e", width=2.5),
 }
 
@@ -162,8 +166,8 @@ def build_canvas(radius_row: np.ndarray, pressure_row: np.ndarray, y_grid: np.nd
 
 
 def default_out_file(phenotype: str, segment_view: str) -> str:
-    """Video path for one phenotype and segment view, inside OUT_DIR."""
-    return os.path.join(OUT_DIR, f"visualization_components_{phenotype}_{segment_view}.mp4")
+    """Video path for one phenotype and segment view, inside OUTPUT_DIR."""
+    return os.path.join(OUTPUT_DIR, f"visualization_components_{phenotype}_{segment_view}.mp4")
 
 
 def make_animation(res: TraceResults, out_file: str, segment_view: str = SEGMENT_VIEW,
@@ -269,11 +273,11 @@ def make_animation(res: TraceResults, out_file: str, segment_view: str = SEGMENT
         if is_narrow:
             # Horizontal titles don't fit in a very thin column, so rotate to vertical instead.
             ax.set_title(spec["title"], fontsize=NARROW_TITLE_FONTSIZE, fontweight="bold",
-                         color=spec["color"], rotation=90, rotation_mode="anchor",
+                         color=spec.get("color"), rotation=90, rotation_mode="anchor",
                          ha="left", va="bottom")
         else:
             ax.set_title(spec["title"], fontsize=TITLE_FONTSIZE, fontweight="bold",
-                         color=spec["color"])
+                         color=spec.get("color"))
         ax.spines[["top", "right"]].set_visible(False)
 
     axes[0].set_ylim(y_bot, y_top)

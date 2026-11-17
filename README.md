@@ -7,7 +7,7 @@ phenotypes:
 -   IBS-D
 -   STC
 
-The colon is modeled as 75 coupled segments including: 
+The colon is modeled as 75 coupled segments including:
 - ICC-inspired phase oscillators
 - Enteric reflex drive (ascending excitation, descending inhibition)
 - Smooth muscle activation dynamics
@@ -20,7 +20,8 @@ The script outputs time-resolved pressure (mmHg) for all 75 segments.
 
 ## How to Run
 
-Install the Python dependencies (Python 3.10+):
+Install the Python dependencies (Python 3.10 or newer; the paper results were
+produced with Python 3.13):
 
     pip install -r requirements.txt
 
@@ -40,7 +41,7 @@ Optional settings:
 
     MAKE_PLOT = True        # set False to disable plotting
     OUT_TXT = None          # custom output filename
-    SEED = 171              # random seed for STC phenotype
+    SEED = 171              # random seed (set for every phenotype; only STC has noise)
 
 ------------------------------------------------------------------------
 
@@ -88,3 +89,13 @@ DPI, line widths, colors) lives in `plot_style.py`.
     python fig_phase_waveforms.py   # phase and ICC waveform vs. Eq. (1) parameters
     python fig_state_variables.py   # W, E, M, p for one proximal and one distal segment
     python fig_sensitivity.py       # local sensitivity heatmap (+ outputs/sensitivity.csv)
+
+The robustness checks quoted in the text (time-step halving, random initial
+phases, 10 noise realizations of STC and of healthy with sigma = 0.1, and the
+neighbor phase-difference SDs) are printed and written to
+`outputs/robustness_checks.csv` by
+
+    python robustness_checks.py
+
+This repository does not contain the code for the power-spectra and
+clinical-comparison figures.

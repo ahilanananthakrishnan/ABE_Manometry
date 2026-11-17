@@ -1,4 +1,4 @@
-# Python 3.10+
+# Python 3.10 or newer (paper results produced with Python 3.13)
 # visualization.py also needs the ffmpeg command-line tool (not pip-installable; see README).
 numpy>=1.24
 matplotlib>=3.7

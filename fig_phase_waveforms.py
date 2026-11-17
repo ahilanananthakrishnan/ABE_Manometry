@@ -27,9 +27,8 @@ Output:
 
 from __future__ import annotations
 
-import os
 import string
-from typing import List, Sequence, Tuple
+from collections.abc import Sequence
 
 import numpy as np
 import matplotlib
@@ -52,7 +51,6 @@ from pressure_traces import (
 # =============================================================================
 # User settings (the phase-noise row uses SEED from pressure_traces.py)
 # =============================================================================
-OUT_DIR = "figures"
 OUT_NAME = "fig_phase_waveforms"
 T_SHOW_S = SimParams().t_sim  # [s] simulated window (same as the model simulations)
 N_CHAIN = 25                 # [-] oscillators in the generic chain
@@ -65,7 +63,6 @@ SIGMA_SWEEP = (0.0, 0.1, 0.2)       # [rad/sqrt(s)] phase-noise amplitude (0 = h
 
 # Figure layout (cosmetic)
 FIG_ASPECT = 1.25                    # [-] height/width
-LINE_WIDTH = 2.2                     # [pt] data lines
 LINE_SHADES = ("0.75", "0.45", ps.INK)  # in sweep order, so darker = larger value in every row
 WIDTH_RATIOS = (1.0, 1.0, 0.42)     # [-] phi column, W column, legend column
 LEGEND_GAP_X = 0.015                 # [figure fraction] gap between W panels and legends
@@ -83,7 +80,7 @@ W_PAD = 0.5                          # [font sizes] horizontal space between pan
 def simulate_phase_chain(n_seg: int, f_cpm: float, k: float, v_cmps: float,
                          sigma_phi: float, retrograde: bool, dx_cm: float,
                          dt: float, t_end: float,
-                         rng: np.random.Generator) -> Tuple[np.ndarray, np.ndarray]:
+                         rng: np.random.Generator) -> tuple[np.ndarray, np.ndarray]:
     """Integrate Eq. (1) for one chain started from a uniform phase.
 
     Returns the time vector and the wrapped phase history (n_time x n_seg).
@@ -127,7 +124,7 @@ def make_figure() -> None:
         k=tuple(fac * baseline["k"] for fac in K_SWEEP_FACTORS),
         sigma_phi=SIGMA_SWEEP,
     )
-    rows: List[Tuple[str, str, Sequence[float]]] = [
+    rows: list[tuple[str, str, Sequence[float]]] = [
         ("f_cpm", r"Intrinsic frequency $f_\kappa$ [cpm]", sweep["f_cpm"]),
         ("v_cmps", r"Propagation speed $v_\kappa$ [cm/s], sets phase lag $\delta_\kappa$",
          sweep["v_cmps"]),
@@ -154,9 +151,10 @@ def make_figure() -> None:
             if np.isclose(val, baseline[key]):
                 label += " (baseline)"  # healthy HAPC value from Tables 1 and 2
             line, = ax_phi.plot(t, break_wraps(phi[:, -1]), color=shade,
-                                linewidth=LINE_WIDTH, label=label)
+                                linewidth=ps.SWEEP_LINE_WIDTH, label=label)
             handles.append((val, line))
-            ax_w.plot(t, icc_waveform_skewed(phi[:, -1], wf), color=shade, linewidth=LINE_WIDTH,
+            ax_w.plot(t, icc_waveform_skewed(phi[:, -1], wf), color=shade,
+                      linewidth=ps.SWEEP_LINE_WIDTH,
                       clip_on=False)  # W_s reaches the upper limit exactly
         ax_phi.set_ylim(0.0, 2.0 * np.pi)
         ax_phi.set_yticks([0.0, np.pi, 2.0 * np.pi])
@@ -176,7 +174,9 @@ def make_figure() -> None:
 
     fig.tight_layout(rect=TIGHT_RECT, h_pad=H_PAD, w_pad=W_PAD)
 
-    # Row titles centered over the two data columns, and row letters at the left
+    # Row headers centered over the two data columns, and row letters at the left. The headers
+    # are panel labels, not plot titles: they name the swept parameter and its unit, which the
+    # legends (values only) need.
     # One unboxed legend per row, entries stacked vertically, just right of the W panel
     extra_artists = []  # kept in the saved bounding box
     for (ax_phi, ax_w, _), (_, title, _), handles, letter in zip(
@@ -192,11 +192,8 @@ def make_figure() -> None:
         extra_artists.append(fig.text(ROW_LABEL_X, left.y1 + TITLE_GAP, letter,
                                       fontsize=ps.PANEL_LABEL_SIZE, va="bottom", ha="left"))
 
-    os.makedirs(OUT_DIR, exist_ok=True)
-    for ext in ("pdf", "svg"):
-        fig.savefig(os.path.join(OUT_DIR, f"{OUT_NAME}.{ext}"), bbox_extra_artists=extra_artists)
+    ps.save_figure(fig, OUT_NAME, extra_artists)
     plt.close(fig)
-    print(f"Saved {OUT_DIR}/{OUT_NAME}.pdf and .svg")
 
 
 if __name__ == "__main__":

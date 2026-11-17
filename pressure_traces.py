@@ -21,7 +21,7 @@ Rectosigmoid brake:
 from __future__ import annotations
 
 from dataclasses import dataclass, fields, replace
-from typing import Dict, NamedTuple, Optional, Tuple
+from typing import NamedTuple
 
 import numpy as np
 import matplotlib.pyplot as plt
@@ -138,7 +138,7 @@ class OscillatorHealthyBaseline:
 @dataclass(frozen=True)
 class BrakeParams:
     """Pressure-gated rectosigmoid brake with hysteresis."""
-    F_sense_1based: Tuple[int, int] = (40, 65)  # [-] sensing field (1-based inclusive)
+    F_sense_1based: tuple[int, int] = (40, 65)  # [-] sensing field (1-based inclusive)
     p_on: float = 50.0   # [mmHg] brake ON threshold
     p_off: float = 20.0  # [mmHg] brake OFF threshold
     tau_P: float = 1.2   # [s] pressure low-pass constant
@@ -171,11 +171,11 @@ class PlotParams:
     trace_linewidth: float = 0.75      # [pt]
     trace_color: str = "black"
     pad_top_offsets: float = 0.5       # [-] headroom above the top trace, in trace spacings
-    pad_bottom_offsets: float = 0.5    # [-] footroom below the bottom trace, in trace spacings
+    pad_bottom_offsets: float = 0.5    # [-] margin below the bottom trace, in trace spacings
     box_aspect: float = 1.0            # [-] axes height / width
-    figsize_in: Tuple[float, float] = (12.0, 4.0)  # [in]
-    dpi: int = 120
-    xticks_s: Tuple[float, ...] = (50.0, 100.0)    # [s] time ticks (dropped if outside the run)
+    figsize_in: tuple[float, float] = (12.0, 4.0)  # [in]
+    dpi: int = 120  # [dots/in] on-screen preview only; exported paper figures use plot_style.DPI
+    xticks_s: tuple[float, ...] = (50.0, 100.0)    # [s] time ticks (dropped if outside the run)
     n_yticks: int = 5                  # [-] approximate number of segment labels
 
 
@@ -194,12 +194,12 @@ class TraceResults(NamedTuple):
     gate: np.ndarray     # [-] distal brake gate Gamma_CMP: 1 = open, 0 = brake ON (n_steps,)
 
 
-ParameterGroups = Tuple[PhenotypeParams, OscillatorHealthyBaseline, WaveformParams, ENSParams,
+ParameterGroups = tuple[PhenotypeParams, OscillatorHealthyBaseline, WaveformParams, ENSParams,
                         MuscleParams, BrakeParams]
 
 
 def parameter_groups(phenotype: str,
-                     overrides: Optional[Dict[str, float]] = None) -> ParameterGroups:
+                     overrides: dict[str, float] | None = None) -> ParameterGroups:
     """Parameter groups that run_traces uses, with ``overrides`` applied by field name.
 
     Tube-law, geometry, and time-step parameters are not overridable here.
@@ -280,7 +280,10 @@ def pressure_from_M(M: np.ndarray, tube: TubeLawParams) -> np.ndarray:
 # Trace plotting (stacked equal spacing)
 # =============================================================================
 def plot_traces_equal_spacing(t: np.ndarray, P: np.ndarray, title: str, pp: PlotParams) -> None:
-    """Stack one pressure trace per segment, segment 1 (proximal) at the top, as in manometry."""
+    """Stack one pressure trace per segment, segment 1 (proximal) at the top, as in manometry.
+
+    ``title`` labels the preview window rather than the axes (no titles on the plot itself).
+    """
     T = P.copy()
     if pp.center_traces:
         T = T - np.nanmedian(T, axis=0, keepdims=True)
@@ -308,7 +311,8 @@ def plot_traces_equal_spacing(t: np.ndarray, P: np.ndarray, title: str, pp: Plot
     ax.set_yticklabels([str(int(i + 1)) for i in idx[order]])
     ax.set_xlabel("Time [s]")
     ax.set_ylabel("Segment [-]")
-    ax.set_title(title)
+    if fig.canvas.manager is not None:
+        fig.canvas.manager.set_window_title(title)
     ax.set_box_aspect(pp.box_aspect)
     ax.grid(False)
     fig.tight_layout()
@@ -319,11 +323,11 @@ def plot_traces_equal_spacing(t: np.ndarray, P: np.ndarray, title: str, pp: Plot
 # Main simulation (Euler + Euler-Maruyama for phase noise)
 # =============================================================================
 def run_traces(phenotype: str = PHENOTYPE, write_output: bool = True,
-               make_plot: bool = MAKE_PLOT, seed: Optional[int] = SEED,
-               out_txt: Optional[str] = OUT_TXT,
-               overrides: Optional[Dict[str, float]] = None,
-               random_phase_seed: Optional[int] = None,
-               dt: Optional[float] = None) -> TraceResults:
+               make_plot: bool = MAKE_PLOT, seed: int | None = SEED,
+               out_txt: str | None = OUT_TXT,
+               overrides: dict[str, float] | None = None,
+               random_phase_seed: int | None = None,
+               dt: float | None = None, verbose: bool = True) -> TraceResults:
     """Simulate all segments for one phenotype and return the recorded time histories.
 
     ``seed`` seeds NumPy's global RNG (only affects phenotypes with phase noise).
@@ -334,6 +338,7 @@ def run_traces(phenotype: str = PHENOTYPE, write_output: bool = True,
     from [0, 2*pi) with that seed instead of the default initial conditions
     (used to check that the phase-locked state does not depend on them).
     ``dt`` overrides the time step [s] (used for the time-step convergence check).
+    ``verbose`` prints the peak pressure and the output file name.
     """
     ph = normalize_phenotype(phenotype)
     case, base, wf, ens, mus, brk = parameter_groups(phenotype, overrides)
@@ -343,6 +348,8 @@ def run_traces(phenotype: str = PHENOTYPE, write_output: bool = True,
     sim = SimParams() if dt is None else SimParams(dt=dt)
     pp = PlotParams()
 
+    # Legacy global RNG kept on purpose: the published STC results (Table 3) were generated
+    # with it, and switching to np.random.default_rng would change the noise sequence.
     if seed is not None:
         np.random.seed(seed)
 
@@ -363,21 +370,22 @@ def run_traces(phenotype: str = PHENOTYPE, write_output: bool = True,
     if out_txt is None:
         out_txt = f"{ph}_pressure_traces.txt"
 
-    # Phase states: only phi_H[:N_HAPC] (proximal HAPC) and phi_C[N_HAPC:] (distal CMP) are used
-    phi_H = np.zeros(N, dtype=float)
-    phi_C = np.zeros(N, dtype=float)
+    # Phase states of the proximal (HAPC, segments 1..N_HAPC) and distal (CMP) subnetworks
+    N_CMP = N - N_HAPC
+    phi_H = np.zeros(N_HAPC, dtype=float)
+    phi_C = np.zeros(N_CMP, dtype=float)
 
     # Initial conditions: proximal linear phase gradient, distal uniform phase (zero)
-    phi_H[:N_HAPC] = np.arange(N_HAPC) * delta_hapc
+    phi_H[:] = np.arange(N_HAPC) * delta_hapc
     if random_phase_seed is not None:
         rng_ic = np.random.default_rng(random_phase_seed)
-        phi_H[:N_HAPC] = rng_ic.uniform(0.0, 2.0 * np.pi, N_HAPC)
-        phi_C[N_HAPC:] = rng_ic.uniform(0.0, 2.0 * np.pi, N - N_HAPC)
+        phi_H[:] = rng_ic.uniform(0.0, 2.0 * np.pi, N_HAPC)
+        phi_C[:] = rng_ic.uniform(0.0, 2.0 * np.pi, N_CMP)
 
     # Initialize filtered excitation and muscle activation consistent with ICC waveform
     E_star = np.zeros(N, dtype=float)
-    E_star[:N_HAPC] = case.a_hapc * icc_waveform_skewed(phi_H[:N_HAPC], wf)
-    E_star[N_HAPC:] = base.a_cmp * icc_waveform_skewed(phi_C[N_HAPC:], wf)
+    E_star[:N_HAPC] = case.a_hapc * icc_waveform_skewed(phi_H, wf)
+    E_star[N_HAPC:] = base.a_cmp * icc_waveform_skewed(phi_C, wf)
     M = E_star.copy()
 
     # Pressure low-pass (only used for brake sensing)
@@ -407,18 +415,18 @@ def run_traces(phenotype: str = PHENOTYPE, write_output: bool = True,
 
         # Nearest-neighbor coupling: HAPC anterograde (s-1), CMP retrograde (s+1),
         # evaluated before the noise is added
-        dphi_H = phase_chain_increment(phi_H[:N_HAPC], omega_hapc, case.k_hapc,
+        dphi_H = phase_chain_increment(phi_H, omega_hapc, case.k_hapc,
                                        delta_hapc, retrograde=False, dt=sim.dt)
-        dphi_C = phase_chain_increment(phi_C[N_HAPC:], omega_cmp, case.k_cmp,
+        dphi_C = phase_chain_increment(phi_C, omega_cmp, case.k_cmp,
                                        delta_cmp, retrograde=True, dt=sim.dt)
 
         # Phase noise (applied within each subnetwork)
         if sd > 0.0:
-            phi_H[:N_HAPC] += sd * np.random.randn(N_HAPC)
-            phi_C[N_HAPC:] += sd * np.random.randn(N - N_HAPC)
+            phi_H += sd * np.random.randn(N_HAPC)
+            phi_C += sd * np.random.randn(N_CMP)
 
-        phi_H[:N_HAPC] += dphi_H
-        phi_C[N_HAPC:] += dphi_C
+        phi_H += dphi_H
+        phi_C += dphi_C
 
         # Rectosigmoid brake: pressure-gated binary distal switch (hysteresis p_on/p_off)
         if case.brake_enabled:
@@ -437,15 +445,15 @@ def run_traces(phenotype: str = PHENOTYPE, write_output: bool = True,
         # ICC-derived myogenic drive with local spread
         D_ICC = np.zeros(N, dtype=float)
 
-        W_H = icc_waveform_skewed(phi_H[:N_HAPC], wf)
-        base_H = case.a_hapc * W_H
-        D_ICC[:N_HAPC] = base_H
-        D_ICC[1:N_HAPC] += base.alpha_spread_hapc * base_H[:-1]
+        W_H = icc_waveform_skewed(phi_H, wf)
+        drive_H = case.a_hapc * W_H
+        D_ICC[:N_HAPC] = drive_H
+        D_ICC[1:N_HAPC] += base.alpha_spread_hapc * drive_H[:-1]
 
-        W_C = icc_waveform_skewed(phi_C[N_HAPC:], wf)
-        base_C = base.a_cmp * W_C
-        D_ICC[N_HAPC:] = base_C
-        D_ICC[N_HAPC:N - 1] += base.alpha_spread_cmp * base_C[1:]
+        W_C = icc_waveform_skewed(phi_C, wf)
+        drive_C = base.a_cmp * W_C
+        D_ICC[N_HAPC:] = drive_C
+        D_ICC[N_HAPC:N - 1] += base.alpha_spread_cmp * drive_C[1:]
 
         # ENS drive from area gradient: ascending excitation, descending inhibition
         DeltaA_pos = np.maximum(A_prev[1:] - A_prev[:-1], 0.0)
@@ -468,8 +476,8 @@ def run_traces(phenotype: str = PHENOTYPE, write_output: bool = True,
         M[:] = (1.0 - aM) * M + aM * E_star
 
         # Record intermediate signals and pressure via nonlinear tube law
-        Phi_rec[k, :N_HAPC] = np.mod(phi_H[:N_HAPC], 2 * np.pi)
-        Phi_rec[k, N_HAPC:] = np.mod(phi_C[N_HAPC:], 2 * np.pi)
+        Phi_rec[k, :N_HAPC] = np.mod(phi_H, 2 * np.pi)
+        Phi_rec[k, N_HAPC:] = np.mod(phi_C, 2 * np.pi)
         W_rec[k, :N_HAPC] = W_H
         W_rec[k, N_HAPC:] = W_C
         D_ICC_rec[k, :] = D_ICC
@@ -481,15 +489,17 @@ def run_traces(phenotype: str = PHENOTYPE, write_output: bool = True,
         gate_rec[k] = 1.0 if cmp_enabled else 0.0
         A_prev = A_rec[k]
 
-    maxP = float(np.max(P_rec))
-    print(f"Max pressure across all sensors ({ph.upper()} model): {maxP:.3f} mmHg")
+    if verbose:
+        maxP = float(np.max(P_rec))
+        print(f"Max pressure across all segments ({ph.upper()} model): {maxP:.3f} mmHg")
 
     if write_output:
         header = "Time_s" + "".join([f"\tSeg_{i}" for i in range(1, N + 1)])
         data_out = np.column_stack([t_rec, P_rec])
         np.savetxt(out_txt, data_out, delimiter="\t", fmt="%.5f", header=header, comments="",
                    encoding="utf-8")
-        print(f"Pressure trace data written to: {out_txt}")
+        if verbose:
+            print(f"Pressure trace data written to: {out_txt}")
 
     if make_plot:
         plot_traces_equal_spacing(

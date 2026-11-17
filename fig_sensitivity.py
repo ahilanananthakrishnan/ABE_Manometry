@@ -26,12 +26,9 @@ Output:
 
 from __future__ import annotations
 
-import contextlib
 import csv
-import io
 import os
 from dataclasses import fields
-from typing import Dict, List, Optional, Tuple
 
 import numpy as np
 import matplotlib
@@ -46,15 +43,14 @@ import pressure_traces as pt
 # =============================================================================
 # User settings
 # =============================================================================
-OUT_DIR = "figures"
 OUT_NAME = "fig_sensitivity"
-CSV_PATH = os.path.join("outputs", "sensitivity.csv")
+CSV_PATH = os.path.join(ps.OUTPUT_DIR, "sensitivity.csv")
 PHENOTYPE = "healthy"
 H_REPORT = 0.01                 # [-] relative step shown in the figure (1%)
 H_CHECK = (0.001, 0.01, 0.1)    # [-] relative steps written to the CSV
 
 # (field name in pressure_traces, axis label), in the order of the original figure
-PARAMETERS: List[Tuple[str, str]] = [
+PARAMETERS: list[tuple[str, str]] = [
     ("f_hapc_cpm", r"$f_{\mathrm{HAPC}}$"),
     ("f_cmp_cpm", r"$f_{\mathrm{CMP}}$"),
     ("v_cmp_cmps", r"$v_{\mathrm{CMP}}$"),
@@ -98,21 +94,20 @@ CBAR_ASPECT = 30             # [-] colorbar length / thickness
 # =============================================================================
 # Sensitivity computation
 # =============================================================================
-def baseline_values(phenotype: str) -> Dict[str, float]:
+def baseline_values(phenotype: str) -> dict[str, float]:
     """Values of all parameters that run_traces accepts as overrides."""
     return {f.name: getattr(g, f.name) for g in pt.parameter_groups(phenotype)
             for f in fields(g)}
 
 
-def outputs(phenotype: str, overrides: Optional[Dict[str, float]] = None) -> np.ndarray:
+def outputs(phenotype: str, overrides: dict[str, float] | None = None) -> np.ndarray:
     """Peak pressure [mmHg] and motility index [mmHg s] of one simulation."""
-    with contextlib.redirect_stdout(io.StringIO()):  # silence the max-pressure print
-        res = pt.run_traces(phenotype, write_output=False, make_plot=False,
-                            overrides=overrides)
+    res = pt.run_traces(phenotype, write_output=False, make_plot=False,
+                        overrides=overrides, verbose=False)
     return np.array([res.P.max(), res.P.sum() * (res.t[1] - res.t[0])])
 
 
-def central_sensitivity(phenotype: str, h: float, base: Dict[str, float],
+def central_sensitivity(phenotype: str, h: float, base: dict[str, float],
                         y0: np.ndarray) -> np.ndarray:
     """Normalized central-difference sensitivities (n_outputs x n_parameters).
 
@@ -126,7 +121,7 @@ def central_sensitivity(phenotype: str, h: float, base: Dict[str, float],
     return S
 
 
-def write_csv(results: Dict[float, np.ndarray]) -> None:
+def write_csv(results: dict[float, np.ndarray]) -> None:
     """One row per parameter, one column per (output, step)."""
     os.makedirs(os.path.dirname(CSV_PATH), exist_ok=True)
     steps = sorted(results)
@@ -183,11 +178,8 @@ def make_figure() -> None:
     cbar.set_label(r"Normalized sensitivity $S$ [-]")
     cbar.ax.tick_params(top=False)
 
-    os.makedirs(OUT_DIR, exist_ok=True)
-    for ext in ("pdf", "svg"):
-        fig.savefig(os.path.join(OUT_DIR, f"{OUT_NAME}.{ext}"))
+    ps.save_figure(fig, OUT_NAME)
     plt.close(fig)
-    print(f"Saved {OUT_DIR}/{OUT_NAME}.pdf and .svg")
 
 
 if __name__ == "__main__":

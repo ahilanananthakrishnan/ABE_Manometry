@@ -14,9 +14,6 @@ Output:
 
 from __future__ import annotations
 
-import os
-from typing import List, Tuple
-
 import numpy as np
 import matplotlib
 
@@ -29,7 +26,6 @@ from pressure_traces import SimParams, run_traces
 # =============================================================================
 # User settings
 # =============================================================================
-OUT_DIR = "figures"
 OUT_NAME = "fig_state_variables"
 PHENOTYPE = "healthy"
 SEG_PROXIMAL = 25   # [-] HAPC segment shown (1-based)
@@ -40,12 +36,11 @@ Y_PRESSURE_MMHG = (0.0, 150.0)  # [mmHg] pressure axis, same in both columns
 
 # Figure layout (cosmetic)
 FIG_ASPECT = 1.05                    # [-] height/width
-LINE_WIDTH = 1.8                     # [pt] data lines
 BRAKE_SHADE = "0.85"                 # fill for brake-ON intervals
 H_PAD = 0.8                          # [font sizes] vertical space between rows
 
 
-def gate_intervals(t: np.ndarray, gate: np.ndarray) -> List[Tuple[float, float]]:
+def gate_intervals(t: np.ndarray, gate: np.ndarray) -> list[tuple[float, float]]:
     """Return (start, end) times of the intervals where the gate is closed (brake ON)."""
     closed = gate < 0.5  # gate is 1 (open) or 0 (brake ON)
     edges = np.diff(closed.astype(int))
@@ -64,6 +59,9 @@ def make_figure() -> None:
     res = run_traces(PHENOTYPE, write_output=False, make_plot=False)
     t = res.t
     brake_on = gate_intervals(t, res.gate)
+    if res.P.max() > Y_PRESSURE_MMHG[1]:  # curves are drawn with clip_on=False
+        raise ValueError(f"peak pressure {res.P.max():.1f} mmHg exceeds the axis limit "
+                         f"{Y_PRESSURE_MMHG[1]} mmHg; raise Y_PRESSURE_MMHG")
 
     rows = [  # (data, label, (ymin, ymax)); min, middle, and max are ticked
         (res.W, r"$W_s$ [-]", Y_UNIT),
@@ -84,7 +82,7 @@ def make_figure() -> None:
             if shade_brake:
                 for start, end in brake_on:
                     ax.axvspan(start, end, color=BRAKE_SHADE, linewidth=0)
-            ax.plot(t, data[:, seg - 1], color=ps.INK, linewidth=LINE_WIDTH,
+            ax.plot(t, data[:, seg - 1], color=ps.INK, linewidth=ps.LINE_WIDTH,
                     clip_on=False)  # W_s reaches the upper limit exactly
             ax.set_xlim(*X_LIM_S)
             ax.set_xticks(np.linspace(*X_LIM_S, 3))
@@ -92,15 +90,13 @@ def make_figure() -> None:
             ax.set_yticks(np.linspace(*ylim, 3))
             if c == 0:
                 ax.set_ylabel(ylabel)
+        # Column headers identify the segment shown (panel labels, not plot titles)
         axes[0, c].set_title(title)
         axes[-1, c].set_xlabel("Time [s]")
 
     fig.tight_layout(h_pad=H_PAD)
-    os.makedirs(OUT_DIR, exist_ok=True)
-    for ext in ("pdf", "svg"):
-        fig.savefig(os.path.join(OUT_DIR, f"{OUT_NAME}.{ext}"))
+    ps.save_figure(fig, OUT_NAME)
     plt.close(fig)
-    print(f"Saved {OUT_DIR}/{OUT_NAME}.pdf and .svg")
 
 
 if __name__ == "__main__":
