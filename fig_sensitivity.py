@@ -77,7 +77,7 @@ OUTPUT_LABELS = ("Peak pressure", "Motility index")
 
 # Figure layout (cosmetic)
 N_SPLIT = 11                 # [-] parameters in the first heatmap block
-CMAP = "RdBu_r"              # diverging: blue (decrease) - white - red (increase)
+CMAP = "bwr"                 # diverging: blue (decrease) - white - red (increase)
 S_LIM = 1.0                  # [-] colorbar range (-S_LIM to S_LIM)
 N_LEVELS = 20                # [-] discrete color levels, 10 on each side of zero (step 0.1)
 FIG_ASPECT = 0.76            # [-] height/width
