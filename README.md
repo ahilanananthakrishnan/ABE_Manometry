@@ -7,7 +7,7 @@ phenotypes:
 -   IBS-D
 -   STC
 
-The colon is modeled as 75 coupled segments including: 
+The colon is modeled as 75 coupled segments including:
 - ICC-inspired phase oscillators
 - Enteric reflex drive (ascending excitation, descending inhibition)
 - Smooth muscle activation dynamics
@@ -19,6 +19,11 @@ The script outputs time-resolved pressure (mmHg) for all 75 segments.
 ------------------------------------------------------------------------
 
 ## How to Run
+
+Install the Python dependencies (Python 3.10 or newer; the paper results were
+produced with Python 3.13):
+
+    pip install -r requirements.txt
 
 From the project directory:
 
@@ -36,7 +41,7 @@ Optional settings:
 
     MAKE_PLOT = True        # set False to disable plotting
     OUT_TXT = None          # custom output filename
-    SEED = 171              # random seed for STC phenotype
+    SEED = 171              # random seed (set for every phenotype; only STC has noise)
 
 ------------------------------------------------------------------------
 
@@ -46,7 +51,58 @@ The script generates:
 
     <phenotype>_pressure_traces.txt
 
-Columns: - Time_s
-- Seg_1 to Seg_75
+Columns:
+
+-   Time_s
+-   Seg_1 to Seg_75
 
 All pressures are in mmHg.
+
+------------------------------------------------------------------------
+
+## Animation
+
+`visualization.py` runs the model for the `PHENOTYPE` set in
+`pressure_traces.py` and renders the internal signals (ICC drive, ENS
+drive, muscle activation, tube cross-section, ...) as a video. It needs
+the `ffmpeg` command-line tool, e.g.
+
+    brew install ffmpeg        # or: conda install ffmpeg
+
+Then run:
+
+    python visualization.py
+
+Choose the panels and segment range with `PANELS` and `SEGMENT_VIEW` at
+the top of `visualization.py`. The video is written to
+
+    outputs/visualization_components_<phenotype>_<segment_view>.mp4
+
+------------------------------------------------------------------------
+
+## Revision figures
+
+Each script below regenerates one figure from the response to the
+reviewers, written to `figures/` as PDF and SVG. Shared styling (fonts,
+DPI, line widths, colors) lives in `plot_style.py`.
+
+    python fig_phase_waveforms.py   # phase and ICC waveform vs. Eq. (1) parameters
+    python fig_state_variables.py   # W, E, M, p for one proximal and one distal segment
+    python fig_sensitivity.py       # local sensitivity heatmap (+ outputs/sensitivity.csv)
+
+The robustness checks quoted in the text (three time-step halvings with L2,
+peak, motility-index, and brake-fraction comparisons; random initial phases;
+10 noise realizations of STC and of healthy with sigma = 0.1; and the neighbor
+phase-difference SDs after a 30 s transient) are printed and written to
+`outputs/robustness_checks.csv` by
+
+    python robustness_checks.py
+
+This repository does not contain the code for the power-spectra and
+clinical-comparison figures.
+
+------------------------------------------------------------------------
+
+## License
+
+GNU General Public License v3.0; see [LICENSE](LICENSE).

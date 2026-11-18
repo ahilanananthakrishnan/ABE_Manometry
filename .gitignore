@@ -5,7 +5,12 @@ __pycache__/
 # macOS
 .DS_Store
 
+# virtual environments
+.venv/
+venv/
+
 
 # output files
 outputs/*
 *_pressure_traces.txt
+figures/*
