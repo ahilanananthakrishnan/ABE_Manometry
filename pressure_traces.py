@@ -198,9 +198,14 @@ class TraceResults(NamedTuple):
     gate: np.ndarray     # [-] distal brake gate Gamma_CMP: 1 = open, 0 = brake ON (n_steps,)
 
 
+def time_step(res: TraceResults) -> float:
+    """Time step [s] between recorded rows."""
+    return res.t[1] - res.t[0]
+
+
 def motility_index(res: TraceResults) -> float:
     """Motility index [mmHg s]: area under the pressure-time curve summed over all segments."""
-    return float(res.P.sum() * (res.t[1] - res.t[0]))
+    return float(res.P.sum() * time_step(res))
 
 
 ParameterGroups = tuple[PhenotypeParams, OscillatorHealthyBaseline, WaveformParams, ENSParams,
@@ -288,11 +293,9 @@ def pressure_from_M(M: np.ndarray, tube: TubeLawParams) -> np.ndarray:
 # =============================================================================
 # Trace plotting (stacked equal spacing)
 # =============================================================================
-def plot_traces_equal_spacing(t: np.ndarray, P: np.ndarray, title: str, pp: PlotParams) -> None:
-    """Stack one pressure trace per segment, segment 1 (proximal) at the top, as in manometry.
-
-    ``title`` labels the preview window rather than the axes (no titles on the plot itself).
-    """
+def draw_stacked_traces(ax: plt.Axes, t: np.ndarray, P: np.ndarray, pp: PlotParams) -> None:
+    """Stack one pressure trace per segment on ``ax``, segment 1 (proximal) at the top,
+    as in manometry."""
     T = P.copy()
     if pp.center_traces:
         T = T - np.nanmedian(T, axis=0, keepdims=True)
@@ -300,8 +303,6 @@ def plot_traces_equal_spacing(t: np.ndarray, P: np.ndarray, title: str, pp: Plot
     nsens = T.shape[1]
     offset_dy = max(1.0, pp.offset_fixed_mmHg)  # guard against zero/negative spacing
     y_base = (nsens - (np.arange(nsens) + 1)) * offset_dy
-    fig = plt.figure(figsize=pp.figsize_in, dpi=pp.dpi)
-    ax = fig.add_subplot(111)
     for s in range(nsens):
         ax.plot(t, T[:, s] + y_base[s], linewidth=pp.trace_linewidth, color=pp.trace_color)
     ax.set_xlim(float(t[0]), float(t[-1]))
@@ -320,10 +321,20 @@ def plot_traces_equal_spacing(t: np.ndarray, P: np.ndarray, title: str, pp: Plot
     ax.set_yticklabels([str(int(i + 1)) for i in idx[order]])
     ax.set_xlabel("Time [s]")
     ax.set_ylabel("Segment [-]")
-    if fig.canvas.manager is not None:
-        fig.canvas.manager.set_window_title(title)
     ax.set_box_aspect(pp.box_aspect)
     ax.grid(False)
+
+
+def plot_traces_equal_spacing(t: np.ndarray, P: np.ndarray, title: str, pp: PlotParams) -> None:
+    """On-screen quick look of the stacked traces (the paper figure is fig_pressure_maps.py).
+
+    ``title`` labels the preview window rather than the axes (no titles on the plot itself).
+    """
+    fig = plt.figure(figsize=pp.figsize_in, dpi=pp.dpi)
+    ax = fig.add_subplot(111)
+    draw_stacked_traces(ax, t, P, pp)
+    if fig.canvas.manager is not None:
+        fig.canvas.manager.set_window_title(title)
     fig.tight_layout()
     plt.show()
 

@@ -34,7 +34,7 @@ import os
 import numpy as np
 
 from plot_style import OUTPUT_DIR
-from pressure_traces import SimParams, TraceResults, motility_index, run_traces
+from pressure_traces import SimParams, TraceResults, motility_index, run_traces, time_step
 
 # =============================================================================
 # User settings
@@ -73,7 +73,7 @@ def relative_l2(coarse: TraceResults, fine: TraceResults, refinement: int) -> fl
 def neighbor_phase_sd(res: TraceResults, transient_s: float = 0.0) -> tuple[float, float]:
     """SD [rad] of the wrapped neighbor phase difference in the HAPC and CMP subnetworks."""
     n_hapc = res.geom.N_HAPC
-    k0 = int(round(transient_s / (res.t[1] - res.t[0])))
+    k0 = int(round(transient_s / time_step(res)))
     sds = []
     for phi in (res.phi[k0:, :n_hapc], res.phi[k0:, n_hapc:]):
         dphi = np.angle(np.exp(1j * np.diff(phi, axis=1)))  # wrap to (-pi, pi]
@@ -110,7 +110,7 @@ def main() -> None:
     print("   seed, peak [mmHg], HAPC neighbor lag mean [rad], lag SD [rad]")
     for s in INITIAL_PHASE_SEEDS:
         res = run("healthy", random_phase_seed=s)
-        k0 = int(round(TRANSIENT_S / (res.t[1] - res.t[0])))
+        k0 = int(round(TRANSIENT_S / time_step(res)))
         lag = np.angle(np.exp(1j * np.diff(res.phi[k0:, :res.geom.N_HAPC], axis=1)))
         print(f"     {s}  {res.P.max():6.1f}  {lag.mean():+.4f}  {lag.std():.4f}")
         rows += [("random_phase_peak", f"seed_{s}", res.P.max()),

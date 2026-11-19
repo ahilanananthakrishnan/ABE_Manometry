@@ -1,6 +1,6 @@
 """
-Figure: power spectra of the simulated pressure maps (model curves of Fig. 5
-of the paper).
+Figure: power spectra of the simulated pressure maps (Fig. 5 of the paper,
+model curves only).
 
 For every segment, the simulated pressure is linearly detrended, multiplied by
 a Hann window, and its periodogram is computed. Each periodogram is normalized
@@ -9,9 +9,10 @@ averaged over all segments. The plotted spectra are zero-padded (PLOT_PAD) to
 interpolate them on a finer grid. The fraction of power below 2 cpm and between
 2 and 6 cpm (the cyclic motor pattern band) is printed and written to the CSV.
 
-Fig. 5 of the paper compares these model spectra with clinical ones computed
-by the same method. The clinical manometry recordings are patient data and
-cannot be shared, so only the model data are analyzed here.
+This script reproduces only the black (model) curves of Fig. 5. The grey
+(clinical) curves were computed by the same method from manometry recordings
+that are patient data and cannot be shared, so they are not part of this
+repository.
 
 Author: Ahilan Anantha Krishnan
 Units: time [s], frequency [cpm], pressure [mmHg]
@@ -62,6 +63,13 @@ N_TICKS = 3                   # [-] ticks per axis, including both ends
 # =============================================================================
 # Spectra
 # =============================================================================
+def in_band(f_cpm: np.ndarray, low: float = 0.0, high: float = F_MAX_CPM,
+            include_low: bool = False) -> np.ndarray:
+    """Mask of frequencies in (low, high], or [low, high] if ``include_low``."""
+    above = f_cpm >= low if include_low else f_cpm > low
+    return above & (f_cpm <= high)
+
+
 def normalized_spectrum(x: np.ndarray, fs_hz: float,
                         pad: int = 1) -> tuple[np.ndarray, np.ndarray]:
     """Mean normalized periodogram over the columns of x (time x channels).
@@ -77,23 +85,22 @@ def normalized_spectrum(x: np.ndarray, fs_hz: float,
     n_fft = pad * n
     p = np.abs(np.fft.rfft(x * np.hanning(n)[:, None], n=n_fft, axis=0)) ** 2
     f_cpm = np.fft.rfftfreq(n_fft, 1.0 / fs_hz) * 60.0
-    band = (f_cpm > 0) & (f_cpm <= F_MAX_CPM)
-    p = p / p[band].sum(axis=0, keepdims=True)
+    p = p / p[in_band(f_cpm)].sum(axis=0, keepdims=True)
     return f_cpm, p.mean(axis=1)
 
 
 def band_fractions(f_cpm: np.ndarray, s: np.ndarray) -> tuple[float, float]:
     """Fraction of power below BAND_LOW_CPM and within the 2-6 cpm band."""
-    total = s[(f_cpm > 0) & (f_cpm <= F_MAX_CPM)].sum()
+    total = s[in_band(f_cpm)].sum()
     low = s[(f_cpm > 0) & (f_cpm < BAND_LOW_CPM)].sum() / total
-    mid = s[(f_cpm >= BAND_LOW_CPM) & (f_cpm <= BAND_HIGH_CPM)].sum() / total
+    mid = s[in_band(f_cpm, BAND_LOW_CPM, BAND_HIGH_CPM, include_low=True)].sum() / total
     return low, mid
 
 
 def model_pressure(case: str) -> tuple[np.ndarray, float]:
     """Simulated pressure (time x segments) and its sampling rate [Hz]."""
     res = pt.run_traces(case, write_output=False, make_plot=False, verbose=False)
-    return res.P, 1.0 / (res.t[1] - res.t[0])
+    return res.P, 1.0 / pt.time_step(res)
 
 
 # =============================================================================
@@ -108,9 +115,13 @@ def make_figure() -> None:
     for ax, (case, title) in zip(axes, CASES.items()):
         p_m, fs_m = model_pressure(case)
         f_p, s_p = normalized_spectrum(p_m, fs_m, PLOT_PAD)   # padded grid: plot
+        density = s_p / (f_p[1] - f_p[0])   # power per cpm, independent of the grid spacing
+        peak = density[in_band(f_p, high=X_MAX_CPM)].max()
+        if peak > Y_LIM[1]:
+            raise ValueError(f"{case}: spectral peak {peak:.3f} exceeds Y_LIM = {Y_LIM}; "
+                             "increase Y_LIM so the curve is not clipped")
         ax.axvspan(BAND_LOW_CPM, BAND_HIGH_CPM, color=BAND_SHADE, lw=0)
-        # power density per cpm, independent of the frequency grid spacing
-        ax.plot(f_p, s_p / (f_p[1] - f_p[0]), color=ps.INK, lw=ps.LINE_WIDTH)
+        ax.plot(f_p, density, color=ps.INK, lw=ps.LINE_WIDTH)
         ax.set_xlim(0, X_MAX_CPM)
         ax.set_xticks(np.linspace(0, X_MAX_CPM, N_TICKS))
         ax.set_ylim(*Y_LIM)
