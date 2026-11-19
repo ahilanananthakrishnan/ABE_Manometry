@@ -88,11 +88,12 @@ colors) lives in `plot_style.py`.
 
     python fig_phase_waveforms.py   # Fig. 2: phase and ICC waveform vs. Eq. (1) parameters
     python fig_state_variables.py   # Fig. 3: W, E, M, p for one proximal and one distal segment
+    python fig_pressure_maps.py     # Fig. 4: simulated pressure maps, one file per phenotype
     python fig_spectra.py           # Fig. 5: model spectra (+ outputs/spectra_bands.csv)
     python fig_sensitivity.py       # Fig. 6: local sensitivity heatmap (+ outputs/sensitivity.csv)
 
-The simulated pressure maps of Fig. 4 come from `pressure_traces.py` (one
-run per phenotype; see above).
+Figs. 4 and 5 compare the model with clinical recordings; the scripts
+reproduce the model panels and curves only (see Data availability).
 
 The robustness checks quoted in the text (three time-step halvings with L2,
 peak, motility-index, and brake-fraction comparisons; random initial phases;
