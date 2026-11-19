@@ -2,7 +2,7 @@
 Figure: phase phi_s(t) (left column) and pacemaker waveform W_s(t) (right
 column) of one oscillator in a generic nearest-neighbor chain for
 variations of each parameter of the Kuramoto-type phase equation, Eq. (1)
-(response to Reviewer 1, comment 1).
+(Fig. 2 of the paper).
 
 Each row shows the table value of one parameter and that value increased by
 50% and 100% (half the table value and zero for the coupling strength), with

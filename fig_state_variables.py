@@ -1,6 +1,6 @@
 """
 Figure: time courses of the key model variables in the healthy case, for one
-proximal (HAPC) and one distal (CMP) segment (response to Reviewer 1, comment 2).
+proximal (HAPC) and one distal (CMP) segment (Fig. 3 of the paper).
 
 Rows: pacemaker waveform W_s, total excitatory drive E_s (ICC + ENS, after
 gating), muscle activation M_s, and pressure p_s. In the distal column, shaded

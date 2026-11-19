@@ -24,6 +24,7 @@ import logging
 import os
 
 import matplotlib as mpl
+from matplotlib.axes import Axes
 from matplotlib.figure import Figure
 
 # =============================================================================
@@ -78,6 +79,14 @@ def apply_style() -> None:
         "savefig.bbox": "tight",
         "savefig.pad_inches": 0.05,
     })
+
+
+def style_axes(ax: Axes) -> None:
+    """Per-axes part of the template: box on and square axes (used for the spectra panels)."""
+    for spine in ax.spines.values():
+        spine.set_visible(True)
+        spine.set_linewidth(AXIS_LINE_WIDTH)
+    ax.set_box_aspect(1.0)
 
 
 def save_figure(fig: Figure, name: str, extra_artists: list | None = None) -> None:
