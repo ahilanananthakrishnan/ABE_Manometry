@@ -80,15 +80,19 @@ the top of `visualization.py`. The video is written to
 
 ------------------------------------------------------------------------
 
-## Revision figures
+## Paper figures
 
-Each script below regenerates one figure from the response to the
-reviewers, written to `figures/` as PDF and SVG. Shared styling (fonts,
-DPI, line widths, colors) lives in `plot_style.py`.
+Each script below regenerates one figure of the paper, written to
+`figures/` as PDF and SVG. Shared styling (fonts, DPI, line widths,
+colors) lives in `plot_style.py`.
 
-    python fig_phase_waveforms.py   # phase and ICC waveform vs. Eq. (1) parameters
-    python fig_state_variables.py   # W, E, M, p for one proximal and one distal segment
-    python fig_sensitivity.py       # local sensitivity heatmap (+ outputs/sensitivity.csv)
+    python fig_phase_waveforms.py   # Fig. 2: phase and ICC waveform vs. Eq. (1) parameters
+    python fig_state_variables.py   # Fig. 3: W, E, M, p for one proximal and one distal segment
+    python fig_spectra.py           # Fig. 5: power spectra (+ outputs/spectra_bands.csv)
+    python fig_sensitivity.py       # Fig. 6: local sensitivity heatmap (+ outputs/sensitivity.csv)
+
+The simulated pressure maps of Fig. 4 come from `pressure_traces.py` (one
+run per phenotype; see above).
 
 The robustness checks quoted in the text (three time-step halvings with L2,
 peak, motility-index, and brake-fraction comparisons; random initial phases;
@@ -98,8 +102,15 @@ phase-difference SDs after a 30 s transient) are printed and written to
 
     python robustness_checks.py
 
-This repository does not contain the code for the power-spectra and
-clinical-comparison figures.
+------------------------------------------------------------------------
+
+## Data availability
+
+The clinical high-resolution manometry recordings shown in Figs. 4 and 5
+are patient data and cannot be shared, so they are not included in this
+repository. `fig_spectra.py` reads them from `../clinical_data/` when they
+are available; without them it computes and plots the model spectra only.
+All model results can be reproduced from this repository alone.
 
 ------------------------------------------------------------------------
 

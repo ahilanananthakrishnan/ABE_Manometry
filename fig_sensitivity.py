@@ -1,6 +1,6 @@
 """
 Figure: local sensitivity of peak pressure and motility index to each model
-parameter around the healthy case (response to Reviewer 1, comment 3).
+parameter around the healthy case (Fig. 6 of the paper).
 
 Each parameter theta is perturbed one at a time by +/- h (relative), with all
 other parameters at their healthy values, and the normalized central-difference
