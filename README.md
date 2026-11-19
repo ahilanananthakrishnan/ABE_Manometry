@@ -88,7 +88,7 @@ colors) lives in `plot_style.py`.
 
     python fig_phase_waveforms.py   # Fig. 2: phase and ICC waveform vs. Eq. (1) parameters
     python fig_state_variables.py   # Fig. 3: W, E, M, p for one proximal and one distal segment
-    python fig_spectra.py           # Fig. 5: power spectra (+ outputs/spectra_bands.csv)
+    python fig_spectra.py           # Fig. 5: model power spectra (+ outputs/spectra_bands.csv)
     python fig_sensitivity.py       # Fig. 6: local sensitivity heatmap (+ outputs/sensitivity.csv)
 
 The simulated pressure maps of Fig. 4 come from `pressure_traces.py` (one
@@ -106,11 +106,10 @@ phase-difference SDs after a 30 s transient) are printed and written to
 
 ## Data availability
 
-The clinical high-resolution manometry recordings shown in Figs. 4 and 5
-are patient data and cannot be shared, so they are not included in this
-repository. `fig_spectra.py` reads them from `../clinical_data/` when they
-are available; without them it computes and plots the model spectra only.
-All model results can be reproduced from this repository alone.
+The clinical high-resolution manometry recordings compared with the model
+in the paper are patient data and cannot be shared, so they are not included
+in this repository. All scripts here analyze model data only, and every model
+result can be reproduced from this repository alone.
 
 ------------------------------------------------------------------------
 

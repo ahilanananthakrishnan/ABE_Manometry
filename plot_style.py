@@ -42,7 +42,6 @@ AXIS_LINE_WIDTH = 1.0      # [pt] axes box and ticks
 LINE_WIDTH = 1.8           # [pt] data curves
 SWEEP_LINE_WIDTH = 2.2     # [pt] overlaid grey-shade sweeps, thicker so the shades stay distinct
 INK = "black"              # text and axis color
-INK_MUTED = "0.55"         # grey for secondary curves (e.g. clinical spectra)
 SERIF_FONTS = ["cmr10", "Computer Modern Roman"]  # LaTeX default font, as in Figs 1-3
 
 
