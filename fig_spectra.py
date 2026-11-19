@@ -1,5 +1,6 @@
 """
-Figure: power spectra of the simulated pressure maps (Fig. 5 of the paper).
+Figure: power spectra of the simulated pressure maps (model curves of Fig. 5
+of the paper).
 
 For every segment, the simulated pressure is linearly detrended, multiplied by
 a Hann window, and its periodogram is computed. Each periodogram is normalized
@@ -8,8 +9,9 @@ averaged over all segments. The plotted spectra are zero-padded (PLOT_PAD) to
 interpolate them on a finer grid. The fraction of power below 2 cpm and between
 2 and 6 cpm (the cyclic motor pattern band) is printed and written to the CSV.
 
-Only the model data are analyzed here. The clinical manometry recordings are
-patient data and cannot be shared, so they are not part of this repository.
+Fig. 5 of the paper compares these model spectra with clinical ones computed
+by the same method. The clinical manometry recordings are patient data and
+cannot be shared, so only the model data are analyzed here.
 
 Author: Ahilan Anantha Krishnan
 Units: time [s], frequency [cpm], pressure [mmHg]
