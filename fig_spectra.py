@@ -48,8 +48,7 @@ PLOT_PAD = 16                 # [-] zero-padding factor for the plotted spectra 
 BAND_LOW_CPM = 2.0            # [cpm] lower edge of the cyclic motor pattern band
 BAND_HIGH_CPM = 6.0           # [cpm] upper edge of the cyclic motor pattern band
 
-# case -> panel header
-CASES: dict[str, str] = {"healthy": "Healthy", "ibsd": "IBS-D", "stc": "STC"}
+CASES = pt.PHENOTYPES          # case -> panel header
 
 # Figure layout (cosmetic)
 FIG_ASPECT = 0.4              # [-] height/width

@@ -40,6 +40,7 @@ LEGEND_FONT_SIZE = 17      # [pt] legend text
 PANEL_LABEL_SIZE = 17      # [pt] panel letters (A, B, ...)
 AXIS_LINE_WIDTH = 1.0      # [pt] axes box and ticks
 LINE_WIDTH = 1.8           # [pt] data curves
+TRACE_LINE_WIDTH = 0.75    # [pt] stacked pressure traces (75 per panel, so thinner)
 SWEEP_LINE_WIDTH = 2.2     # [pt] overlaid grey-shade sweeps, thicker so the shades stay distinct
 INK = "black"              # text and axis color
 SERIF_FONTS = ["cmr10", "Computer Modern Roman"]  # LaTeX default font, as in Figs 1-3
@@ -82,10 +83,7 @@ def apply_style() -> None:
 
 
 def style_axes(ax: Axes) -> None:
-    """Per-axes part of the template: box on and square axes (used for the spectra panels)."""
-    for spine in ax.spines.values():
-        spine.set_visible(True)
-        spine.set_linewidth(AXIS_LINE_WIDTH)
+    """Square axes (used for the spectra panels); box and line widths come from apply_style()."""
     ax.set_box_aspect(1.0)
 
 

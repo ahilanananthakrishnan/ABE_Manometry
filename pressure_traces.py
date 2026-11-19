@@ -55,6 +55,9 @@ class PhenotypeParams:
     sigma_phi: float     # [rad/sqrt(s)] phase noise amplitude
 
 
+PHENOTYPES: dict[str, str] = {"healthy": "Healthy", "ibsd": "IBS-D", "stc": "STC"}  # label -> name
+
+
 def normalize_phenotype(phenotype: str) -> str:
     """Phenotype label in canonical form ('Healthy ' -> 'healthy')."""
     return phenotype.strip().lower()
@@ -75,7 +78,7 @@ def phenotype_params(phenotype: str) -> PhenotypeParams:
         return PhenotypeParams(a_hapc=0.62, brake_enabled=True, k_hapc=0.2, k_cmp=0.2,
                                v_hapc_cmps=1.1, sigma_phi=0.5)
     else:
-        raise ValueError("PHENOTYPE must be one of: 'healthy', 'ibsd', 'stc'")
+        raise ValueError(f"PHENOTYPE must be one of: {', '.join(map(repr, PHENOTYPES))}")
 
 
 # =============================================================================
@@ -174,13 +177,15 @@ class PlotParams:
     offset_fixed_mmHg: float = 20.0    # [mmHg] vertical spacing between stacked traces
     trace_linewidth: float = 0.75      # [pt]
     trace_color: str = "black"
+    scale_bar_width: float = 1.8       # [pt] line width of the pressure scale bar
     pad_top_offsets: float = 0.5       # [-] headroom above the top trace, in trace spacings
     pad_bottom_offsets: float = 0.5    # [-] margin below the bottom trace, in trace spacings
     box_aspect: float = 1.0            # [-] axes height / width
     figsize_in: tuple[float, float] = (12.0, 4.0)  # [in]
     dpi: int = 120  # [dots/in] on-screen preview only; exported paper figures use plot_style.DPI
     xticks_s: tuple[float, ...] = (50.0, 100.0)    # [s] time ticks (dropped if outside the run)
-    n_yticks: int = 5                  # [-] approximate number of segment labels
+    segment_ticks: tuple[int, ...] = (1, 25, 50, 75)  # [-] labeled segments (1-based)
+    scale_bar_mmHg: float = 100.0      # [mmHg] height of the pressure scale bar (0 = none)
 
 
 class TraceResults(NamedTuple):
@@ -196,6 +201,21 @@ class TraceResults(NamedTuple):
     P: np.ndarray        # [mmHg] pressure
     geom: "Geometry"
     gate: np.ndarray     # [-] distal brake gate Gamma_CMP: 1 = open, 0 = brake ON (n_steps,)
+
+
+def angular_frequency(f_cpm: float) -> float:
+    """Intrinsic angular frequency ω = 2π (f / 60) [rad/s] from f [cpm]."""
+    return 2.0 * np.pi * (f_cpm / 60.0)
+
+
+def phase_lag(omega: float, v_cmps: float, dx_cm: float) -> float:
+    """Per-segment phase lag δ = -ω dx / v [rad] that sets the preferred propagation speed v."""
+    return -(omega / (v_cmps / dx_cm))
+
+
+def neighbor_phase_difference(phi: np.ndarray) -> np.ndarray:
+    """Neighbor phase difference φ_{s+1} - φ_s [rad] along axis 1, wrapped to (-π, π]."""
+    return np.angle(np.exp(1j * np.diff(phi, axis=1)))
 
 
 def time_step(res: TraceResults) -> float:
@@ -300,10 +320,10 @@ def draw_stacked_traces(ax: plt.Axes, t: np.ndarray, P: np.ndarray, pp: PlotPara
     if pp.center_traces:
         T = T - np.nanmedian(T, axis=0, keepdims=True)
     T *= pp.trace_gain
-    nsens = T.shape[1]
+    n_seg = T.shape[1]
     offset_dy = max(1.0, pp.offset_fixed_mmHg)  # guard against zero/negative spacing
-    y_base = (nsens - (np.arange(nsens) + 1)) * offset_dy
-    for s in range(nsens):
+    y_base = (n_seg - (np.arange(n_seg) + 1)) * offset_dy
+    for s in range(n_seg):
         ax.plot(t, T[:, s] + y_base[s], linewidth=pp.trace_linewidth, color=pp.trace_color)
     ax.set_xlim(float(t[0]), float(t[-1]))
     ax.set_ylim(
@@ -313,12 +333,18 @@ def draw_stacked_traces(ax: plt.Axes, t: np.ndarray, P: np.ndarray, pp: PlotPara
     xticks_in = [x for x in pp.xticks_s if t[0] <= x <= t[-1]]
     ax.set_xticks(xticks_in)
     ax.set_xticklabels([str(int(x)) for x in xticks_in])
-    step = max(1, int(np.ceil(nsens / pp.n_yticks)))
-    idx = np.arange(0, nsens, step)
-    pos = y_base[idx]
-    order = np.argsort(pos)
-    ax.set_yticks(pos[order])
-    ax.set_yticklabels([str(int(i + 1)) for i in idx[order]])
+    ticks = [s for s in pp.segment_ticks if 1 <= s <= n_seg]
+    ax.set_yticks(y_base[np.array(ticks) - 1])
+    ax.set_yticklabels([str(s) for s in ticks])
+    if pp.scale_bar_mmHg > 0:
+        # vertical bar just right of the axes, at the bottom; traces are scaled by trace_gain
+        trans = ax.get_yaxis_transform()  # x in axes fraction, y in data
+        y0 = y_base[-1] - pp.pad_bottom_offsets * offset_dy
+        y1 = y0 + pp.scale_bar_mmHg * pp.trace_gain
+        ax.plot([1.04, 1.04], [y0, y1], transform=trans, color=pp.trace_color,
+                linewidth=pp.scale_bar_width, clip_on=False, solid_capstyle="butt")
+        ax.text(1.08, y0, f"{pp.scale_bar_mmHg:g} mmHg", transform=trans,
+                rotation=90, ha="left", va="bottom", color=pp.trace_color)
     ax.set_xlabel("Time [s]")
     ax.set_ylabel("Segment [-]")
     ax.set_box_aspect(pp.box_aspect)
@@ -373,16 +399,12 @@ def run_traces(phenotype: str = PHENOTYPE, write_output: bool = True,
     if seed is not None:
         np.random.seed(seed)
 
-    # Intrinsic frequencies ω_kappa = 2π f_kappa (f in Hz)
-    f_hapc_hz = base.f_hapc_cpm / 60.0
-    f_cmp_hz = base.f_cmp_cpm / 60.0
-    omega_hapc = 2.0 * np.pi * f_hapc_hz
-    omega_cmp = 2.0 * np.pi * f_cmp_hz
-
-    # Per-segment phase lags δ_kappa encoding preferred propagation speeds
+    # Intrinsic frequencies ω_kappa and per-segment phase lags δ_kappa
+    omega_hapc = angular_frequency(base.f_hapc_cpm)
+    omega_cmp = angular_frequency(base.f_cmp_cpm)
     dx = geom.dx_cm
-    delta_hapc = -(omega_hapc / (case.v_hapc_cmps / dx))
-    delta_cmp = -(omega_cmp / (base.v_cmp_cmps / dx))
+    delta_hapc = phase_lag(omega_hapc, case.v_hapc_cmps, dx)
+    delta_cmp = phase_lag(omega_cmp, base.v_cmp_cmps, dx)
 
     N = geom.N
     N_HAPC = geom.N_HAPC
