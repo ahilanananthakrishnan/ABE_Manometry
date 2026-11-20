@@ -16,6 +16,8 @@ Robustness checks quoted in the manuscript text, computed from pressure_traces.p
      subnetwork, averaged over REALIZATION_SEEDS, for healthy coupling with sigma_phi =
      0.1 and 0.5, the STC case, and STC coupling without noise.
 
+All SDs over realizations are population SDs (np.std, ddof = 0), as in the paper.
+
 Author: Ahilan Anantha Krishnan
 Units: length [cm], time [s], pressure [mmHg], phase [rad]
 Dimension: 1D chain of colon segments
@@ -34,19 +36,20 @@ import os
 import numpy as np
 
 from plot_style import OUTPUT_DIR
-from pressure_traces import SimParams, TraceResults, motility_index, run_traces
+from pressure_traces import (PHENOTYPES, SimParams, TraceResults, motility_index,
+                             neighbor_phase_difference, phenotype_params, run_traces, time_step)
 
 # =============================================================================
 # User settings
 # =============================================================================
 CSV_PATH = os.path.join(OUTPUT_DIR, "robustness_checks.csv")
-DETERMINISTIC = ("healthy", "ibsd")  # phenotypes without phase noise
+DETERMINISTIC = tuple(p for p in PHENOTYPES if phenotype_params(p).sigma_phi == 0.0)
 N_HALVINGS = 3                     # [-] dt, dt/2, ..., dt/2**N_HALVINGS (check 1)
 REALIZATION_SEEDS = range(10)      # [-] seeds of the noise realizations (checks 1, 3, 4)
 INITIAL_PHASE_SEEDS = range(10)    # [-] seeds of the random initial phases (check 2)
 TRANSIENT_S = 30.0                 # [s] discarded before measuring phase coherence (2, 4)
 SIGMA_HEALTHY_CHECK = 0.1          # [rad/sqrt(s)] noise added to the healthy case (3, 4)
-SIGMA_STC = 0.5                    # [rad/sqrt(s)] STC noise, with healthy coupling (check 4)
+SIGMA_STC = phenotype_params("stc").sigma_phi  # [rad/sqrt(s)] with healthy coupling (check 4)
 
 
 def run(phenotype: str, **kwargs) -> TraceResults:
@@ -70,15 +73,19 @@ def relative_l2(coarse: TraceResults, fine: TraceResults, refinement: int) -> fl
     return float(np.sqrt(((coarse.P - ref) ** 2).sum() / (ref ** 2).sum()))
 
 
+def phase_differences(res: TraceResults,
+                      transient_s: float = 0.0) -> tuple[np.ndarray, np.ndarray]:
+    """Wrapped neighbor phase differences [rad] after transient_s, HAPC and CMP subnetworks."""
+    n_hapc = res.geom.N_HAPC
+    k0 = int(round(transient_s / time_step(res)))
+    return (neighbor_phase_difference(res.phi[k0:, :n_hapc]),
+            neighbor_phase_difference(res.phi[k0:, n_hapc:]))
+
+
 def neighbor_phase_sd(res: TraceResults, transient_s: float = 0.0) -> tuple[float, float]:
     """SD [rad] of the wrapped neighbor phase difference in the HAPC and CMP subnetworks."""
-    n_hapc = res.geom.N_HAPC
-    k0 = int(round(transient_s / (res.t[1] - res.t[0])))
-    sds = []
-    for phi in (res.phi[k0:, :n_hapc], res.phi[k0:, n_hapc:]):
-        dphi = np.angle(np.exp(1j * np.diff(phi, axis=1)))  # wrap to (-pi, pi]
-        sds.append(float(dphi.std()))
-    return sds[0], sds[1]
+    hapc, cmp = phase_differences(res, transient_s)
+    return float(hapc.std()), float(cmp.std())
 
 
 def main() -> None:
@@ -110,8 +117,7 @@ def main() -> None:
     print("   seed, peak [mmHg], HAPC neighbor lag mean [rad], lag SD [rad]")
     for s in INITIAL_PHASE_SEEDS:
         res = run("healthy", random_phase_seed=s)
-        k0 = int(round(TRANSIENT_S / (res.t[1] - res.t[0])))
-        lag = np.angle(np.exp(1j * np.diff(res.phi[k0:, :res.geom.N_HAPC], axis=1)))
+        lag, _ = phase_differences(res, TRANSIENT_S)
         print(f"     {s}  {res.P.max():6.1f}  {lag.mean():+.4f}  {lag.std():.4f}")
         rows += [("random_phase_peak", f"seed_{s}", res.P.max()),
                  ("random_phase_hapc_lag", f"seed_{s}", float(lag.mean()))]

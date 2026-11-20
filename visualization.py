@@ -12,7 +12,8 @@ Panels (choose any subset/order via PANELS below):
   traces  Pressure trace over time (spatiotemporal waterfall, revealed as it plays)
 
 Author: Maria Holland
-Units: length (cm)
+Units: length [cm], time [s], pressure [mmHg], phase [rad]
+Dimension: 1D chain of colon segments
 """
 
 from __future__ import annotations
@@ -28,7 +29,7 @@ import matplotlib.animation as animation
 from matplotlib.colors import Normalize
 
 from plot_style import OUTPUT_DIR
-from pressure_traces import PHENOTYPE, SimParams, TraceResults, run_traces
+from pressure_traces import PHENOTYPE, TraceResults, run_traces, time_step
 
 # =============================================================================
 # User settings (the phenotype is set by PHENOTYPE in pressure_traces.py)
@@ -252,7 +253,7 @@ def make_animation(res: TraceResults, out_file: str, segment_view: str = SEGMENT
         elif key == "traces":
             trace_lines = [ax.plot([], [], color=TRACE_LINE_COLOR, lw=TRACE_LINE_LW)[0]
                            for _ in range(n_show)]
-            ax.set_xlim(0, SimParams().t_sim)
+            ax.set_xlim(0, len(t_rec) * time_step(res))  # simulated duration
             ax.set_xlabel("Time [s]")
             artists["traces"] = trace_lines
         else:

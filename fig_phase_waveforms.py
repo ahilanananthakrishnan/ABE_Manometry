@@ -49,6 +49,7 @@ from pressure_traces import (
     WaveformParams,
     icc_waveform_skewed,
     phase_chain_increment,
+    phase_lag,
     phenotype_params,
 )
 
@@ -89,8 +90,10 @@ def simulate_phase_chain(n_seg: int, f_cpm: float, k: float, v_cmps: float,
 
     Returns the time vector and the wrapped phase history (n_time x n_seg).
     """
+    # Same ω as pressure_traces.angular_frequency, but 2π f / 60 rounds differently from
+    # 2π (f / 60); kept as is so the published Fig. 2 curves stay bit-identical.
     omega = 2.0 * np.pi * f_cpm / 60.0
-    delta = -omega / (v_cmps / dx_cm)
+    delta = phase_lag(omega, v_cmps, dx_cm)
     n_time = int(round(t_end / dt))
     phi = np.zeros(n_seg, dtype=float)
     phi_rec = np.zeros((n_time, n_seg), dtype=float)
